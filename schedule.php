@@ -1,7 +1,5 @@
 <?php
 // ─── DB Configuration ───────────────────────────────────────────────
-// ─── DB Configuration ───────────────────────────────────────────────
-// ─── DB Configuration ───────────────────────────────────────────────
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'croven_events');
 define('DB_USER', 'root');
