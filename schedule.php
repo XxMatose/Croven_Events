@@ -172,18 +172,18 @@ $eventsJson = json_encode(array_values($events));
 </div>
 <?php endif; ?>
 
-<!-- Keep ALL your existing JS unchanged -->
 <script>
-const allEvents  = <?= $eventsJson ?>;
-const cards      = () => document.querySelectorAll('#cardGrid .card');
-const countEl    = document.getElementById('visibleCount');
-const noResults  = document.getElementById('noResults');
+const allEvents   = <?= $eventsJson ?>;
+const cards       = () => document.querySelectorAll('#cardGrid .card');
+const countEl     = document.getElementById('visibleCount');
+const noResults   = document.getElementById('noResults');
 const searchInput = document.getElementById('searchInput');
-const clearBtn   = document.getElementById('clearBtn');
+const clearBtn    = document.getElementById('clearBtn');
 const datePickerBtn = document.getElementById('datePickerBtn');
 
-let activeMode    = 'event';
-let activeDateISO = null;
+let activeMode  = 'event';
+let rangeStart  = null;  // confirmed ISO start
+let rangeEnd    = null;  // confirmed ISO end (null = single day)
 
 // ── Filter tabs ────────────────────────────────────────────────────
 document.querySelectorAll('.filter-tab').forEach(tab => {
@@ -191,14 +191,13 @@ document.querySelectorAll('.filter-tab').forEach(tab => {
     document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     activeMode = tab.dataset.mode;
-    // Show/hide date picker button
     datePickerBtn.style.display = activeMode === 'date' ? 'inline-block' : 'none';
-    if (activeMode !== 'date') { activeDateISO = null; }
+    if (activeMode !== 'date') { rangeStart = rangeEnd = null; }
     runFilter();
   });
 });
 
-// Hide date picker btn unless in date mode
+// Hide date picker button unless on Date tab
 datePickerBtn.style.display = 'none';
 
 // ── Search input ───────────────────────────────────────────────────
@@ -207,12 +206,12 @@ searchInput.addEventListener('input', runFilter);
 // ── Clear button ───────────────────────────────────────────────────
 clearBtn.addEventListener('click', () => {
   searchInput.value = '';
-  activeDateISO = null;
+  rangeStart = rangeEnd = null;
   datePickerBtn.textContent = '📅 Pick date';
   runFilter();
 });
 
-// ── Main filter function ───────────────────────────────────────────
+// ── Main filter ────────────────────────────────────────────────────
 function runFilter() {
   const q = searchInput.value.trim().toLowerCase();
   let visible = 0;
@@ -220,10 +219,14 @@ function runFilter() {
   cards().forEach(card => {
     let show = false;
 
-    if (activeMode === 'date' && activeDateISO) {
-      const start = card.dataset.startdate;
-      const end   = card.dataset.enddate || start;
-      show = activeDateISO >= start && activeDateISO <= end;
+    if (activeMode === 'date' && rangeStart) {
+      // An event is included if its date range overlaps the selected range.
+      // Event must start on or before the selection end,
+      // and end on or after the selection start.
+      const evStart = card.dataset.startdate;
+      const evEnd   = card.dataset.enddate || evStart;
+      const selEnd  = rangeEnd || rangeStart;
+      show = evStart <= selEnd && evEnd >= rangeStart;
     } else if (!q) {
       show = true;
     } else if (activeMode === 'event') {
@@ -242,125 +245,202 @@ function runFilter() {
   noResults.style.display = visible === 0 ? 'block' : 'none';
 }
 
-// ── Date picker (inline calendar modal) ───────────────────────────
-// Build a simple modal calendar
-const modalHtml = `
-<div class="modal-overlay" id="calModal">
-  <div class="calendar-modal">
-    <div class="cal-header">
-      <button class="cal-nav" id="calPrev">&#8249;</button>
-      <span id="calMonthLabel"></span>
-      <button class="cal-nav" id="calNext">&#8250;</button>
-    </div>
-    <div class="cal-grid" id="calGrid"></div>
-    <div class="cal-footer">
-      <button class="cal-clear" id="calClear">Clear</button>
-      <button class="cal-confirm" id="calConfirm">Confirm</button>
+// ── Build calendar modal ───────────────────────────────────────────
+document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-overlay" id="calModal">
+    <div class="calendar-modal">
+      <div id="calHint" class="cal-hint">Click a start date</div>
+      <div class="cal-header">
+        <button class="cal-nav" id="calPrev">&#8249;</button>
+        <span id="calMonthLabel"></span>
+        <button class="cal-nav" id="calNext">&#8250;</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-footer">
+        <button class="cal-clear" id="calClear">Clear</button>
+        <button class="cal-confirm" id="calConfirm">Confirm</button>
+      </div>
     </div>
   </div>
-</div>`;
-document.body.insertAdjacentHTML('beforeend', modalHtml);
+`);
 
-// Collect all event dates for highlighting
+// Build a set of every date that belongs to at least one event (for highlighting)
 const eventDateSet = new Set();
 allEvents.forEach(ev => {
-  if (ev.event_StartDate && ev.event_EndDate) {
-    let d = new Date(ev.event_StartDate);
-    const end = new Date(ev.event_EndDate);
-    while (d <= end) {
-      eventDateSet.add(d.toISOString().slice(0, 10));
-      d.setDate(d.getDate() + 1);
-    }
-  } else if (ev.event_StartDate) {
-    eventDateSet.add(ev.event_StartDate);
+  if (!ev.event_StartDate) return;
+  let d   = new Date(ev.event_StartDate + 'T00:00:00');
+  const e = new Date((ev.event_EndDate || ev.event_StartDate) + 'T00:00:00');
+  while (d <= e) {
+    eventDateSet.add(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
   }
 });
 
-let calYear, calMonth, tempDate = null;
-const today = new Date();
-calYear  = today.getFullYear();
-calMonth = today.getMonth();
+const today    = new Date();
+const todayISO = today.toISOString().slice(0, 10);
+let calYear    = today.getFullYear();
+let calMonth   = today.getMonth();
+
+// Temp state while the modal is open
+let tempStart  = null;
+let tempEnd    = null;
+let hoverISO   = null;
+
+function isoDate(y, m, d) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function fmtDisplay(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
 
 function renderCal() {
-  const label = new Date(calYear, calMonth, 1)
-    .toLocaleString('default', { month: 'long', year: 'numeric' });
-  document.getElementById('calMonthLabel').textContent = label;
+  // Work out the effective range to highlight (start always <= end)
+  let hiStart = tempStart;
+  let hiEnd   = tempEnd;
+
+  // If we have a start but no confirmed end yet, use hover as preview end
+  if (tempStart && !tempEnd && hoverISO) {
+    if (hoverISO >= tempStart) {
+      hiStart = tempStart;
+      hiEnd   = hoverISO;
+    } else {
+      hiStart = hoverISO;
+      hiEnd   = tempStart;
+    }
+  }
+
+  // Update hint text
+  const hint = document.getElementById('calHint');
+  if (!tempStart) {
+    hint.textContent = 'Click a start date';
+  } else if (!tempEnd) {
+    hint.textContent = `Start: ${fmtDisplay(tempStart)} — now pick an end date`;
+  } else {
+    hint.textContent = `${fmtDisplay(tempStart)} → ${fmtDisplay(tempEnd)}`;
+  }
+
+  // Month label
+  document.getElementById('calMonthLabel').textContent =
+    new Date(calYear, calMonth, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const grid = document.getElementById('calGrid');
   grid.innerHTML = '';
 
-  // Day labels
-  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d => {
+  // Day-of-week headers
+  ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].forEach(label => {
     const el = document.createElement('div');
     el.className = 'cal-day-label';
-    el.textContent = d;
+    el.textContent = label;
     grid.appendChild(el);
   });
 
-  const firstDay = new Date(calYear, calMonth, 1).getDay();
-  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const firstWeekday  = new Date(calYear, calMonth, 1).getDay();
+  const daysThisMonth = new Date(calYear, calMonth + 1, 0).getDate();
 
-  for (let i = 0; i < firstDay; i++) {
+  // Empty leading cells
+  for (let i = 0; i < firstWeekday; i++) {
     const el = document.createElement('div');
     el.className = 'cal-day empty';
     grid.appendChild(el);
   }
 
-  for (let day = 1; day <= daysInMonth; day++) {
-    const iso = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const el = document.createElement('div');
+  // Day cells
+  for (let day = 1; day <= daysThisMonth; day++) {
+    const iso = isoDate(calYear, calMonth, day);
+    const el  = document.createElement('div');
     el.className = 'cal-day';
     el.textContent = day;
-    if (eventDateSet.has(iso))  el.classList.add('has-event');
-    if (tempDate === iso)        el.classList.add('selected');
-    const todayISO = today.toISOString().slice(0, 10);
-    if (iso === todayISO)        el.classList.add('today');
+
+    if (eventDateSet.has(iso)) el.classList.add('has-event');
+    if (iso === todayISO)       el.classList.add('today');
+
+    if (hiStart && hiEnd) {
+      if (iso === hiStart && iso === hiEnd) {
+        el.classList.add('range-start', 'range-end');
+      } else if (iso === hiStart) {
+        el.classList.add('range-start');
+      } else if (iso === hiEnd) {
+        el.classList.add('range-end');
+      } else if (iso > hiStart && iso < hiEnd) {
+        el.classList.add('in-range');
+      }
+    } else if (hiStart && iso === hiStart) {
+      // Single start selected, nothing hovered yet
+      el.classList.add('range-start', 'range-end');
+    }
+
+    el.addEventListener('mouseenter', () => { hoverISO = iso; renderCal(); });
+    el.addEventListener('mouseleave', () => { hoverISO = null; renderCal(); });
 
     el.addEventListener('click', () => {
-      tempDate = iso;
+      if (!tempStart || (tempStart && tempEnd)) {
+        // No start yet, or starting fresh after a complete selection
+        tempStart = iso;
+        tempEnd   = null;
+      } else {
+        // We have a start, now set the end
+        if (iso < tempStart) {
+          // Clicked before start — swap
+          tempEnd   = tempStart;
+          tempStart = iso;
+        } else {
+          tempEnd = iso;
+        }
+      }
       renderCal();
     });
+
     grid.appendChild(el);
   }
 }
 
+// Open modal
 datePickerBtn.addEventListener('click', () => {
-  tempDate = activeDateISO;
+  // Pre-populate with any existing confirmed range
+  tempStart = rangeStart;
+  tempEnd   = rangeEnd;
+  hoverISO  = null;
   renderCal();
   document.getElementById('calModal').classList.add('open');
 });
 
+// Month navigation
 document.getElementById('calPrev').addEventListener('click', () => {
   calMonth--;
   if (calMonth < 0) { calMonth = 11; calYear--; }
   renderCal();
 });
-
 document.getElementById('calNext').addEventListener('click', () => {
   calMonth++;
   if (calMonth > 11) { calMonth = 0; calYear++; }
   renderCal();
 });
 
+// Clear button inside modal
 document.getElementById('calClear').addEventListener('click', () => {
-  tempDate = null;
-  activeDateISO = null;
+  tempStart = tempEnd = rangeStart = rangeEnd = null;
   datePickerBtn.textContent = '📅 Pick date';
   document.getElementById('calModal').classList.remove('open');
   runFilter();
 });
 
+// Confirm button
 document.getElementById('calConfirm').addEventListener('click', () => {
-  activeDateISO = tempDate;
-  if (activeDateISO) {
-    const [y, m, d] = activeDateISO.split('-');
-    datePickerBtn.textContent = `📅 ${d}/${m}/${y}`;
+  rangeStart = tempStart;
+  rangeEnd   = tempEnd;
+  if (rangeStart && rangeEnd) {
+    datePickerBtn.textContent = `📅 ${fmtDisplay(rangeStart)} → ${fmtDisplay(rangeEnd)}`;
+  } else if (rangeStart) {
+    datePickerBtn.textContent = `📅 ${fmtDisplay(rangeStart)}`;
   }
   document.getElementById('calModal').classList.remove('open');
   runFilter();
 });
 
-// Close modal on overlay click
+// Close on overlay click
 document.getElementById('calModal').addEventListener('click', e => {
   if (e.target === document.getElementById('calModal')) {
     document.getElementById('calModal').classList.remove('open');
