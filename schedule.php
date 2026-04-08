@@ -372,8 +372,7 @@ function renderCal() {
       el.classList.add('range-start', 'range-end');
     }
 
-    el.addEventListener('mouseenter', () => { hoverISO = iso; renderCal(); });
-    el.addEventListener('mouseleave', () => { hoverISO = null; renderCal(); });
+    el.dataset.iso = iso;
 
     el.addEventListener('click', () => {
       if (!tempStart || (tempStart && tempEnd)) {

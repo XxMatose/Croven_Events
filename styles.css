@@ -801,12 +801,9 @@ CALENDAR MODAL
 
 .cal-day.has-event {
   font-weight: 500;
-  color: var(--accent);
-}
-
-.cal-day.selected {
-  background: var(--accent);
-  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
 }
 
 .cal-day.today {
