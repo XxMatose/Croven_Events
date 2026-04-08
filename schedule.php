@@ -34,6 +34,8 @@ foreach ($rows as $row) {
             'event_StartDate' => $row['event_StartDate'],
             'event_EndDate'   => $row['event_EndDate'],
             'venue_Name'      => $row['venue_Name'],
+            'venue_City'      => $row['venue_City'],
+            'venue_State'     => $row['venue_State'],
             'performers'      => [],
         ];
     }
@@ -86,6 +88,8 @@ $eventsJson = json_encode(array_values($events));
   <div class="filter-tabs">
     <span class="filter-tab active" data-mode="event">Event</span>
     <span class="filter-tab" data-mode="venue">Venue</span>
+    <span class="filter-tab" data-mode="city">City</span>
+    <span class="filter-tab" data-mode="state">State</span>
     <span class="filter-tab" data-mode="performer">Performer</span>
     <span class="filter-tab" data-mode="date">Date</span>
   </div>
@@ -117,6 +121,8 @@ $eventsJson = json_encode(array_values($events));
     <div class="card"
          data-event="<?= htmlspecialchars(strtolower($event['event_Name'])) ?>"
          data-venue="<?= htmlspecialchars(strtolower($event['venue_Name'] ?? '')) ?>"
+         data-city="<?= htmlspecialchars(strtolower($event['venue_City'] ?? '')) ?>"
+         data-state="<?= htmlspecialchars(strtolower($event['venue_State'] ?? '')) ?>"
          data-performers="<?= htmlspecialchars(strtolower(implode('|', $performers))) ?>"
          data-startdate="<?= htmlspecialchars($event['event_StartDate'] ?? '') ?>"
          data-enddate="<?= htmlspecialchars($event['event_EndDate'] ?? '') ?>">
@@ -124,7 +130,7 @@ $eventsJson = json_encode(array_values($events));
       <div class="card-header">
         <span class="event-name"><?= htmlspecialchars($event['event_Name']) ?></span>
         <div class="event-meta">
-          <span><?= htmlspecialchars($event['event_Year']) ?></span>
+          <!-- <span><?= htmlspecialchars($event['event_Year']) ?></span> -->
           <span><?= $start ?><?= $end && $end !== $start ? ' – ' . $end : '' ?></span>
         </div>
       </div>
@@ -134,6 +140,14 @@ $eventsJson = json_encode(array_values($events));
           <span class="venue-icon">&#9679;</span>
           <?= htmlspecialchars($event['venue_Name']) ?>
         </div>
+        <?php
+          $cityState = array_filter([$event['venue_City'] ?? '', $event['venue_State'] ?? '']);
+        ?>
+        <?php if (!empty($cityState)): ?>
+          <div class="venue-location">
+            <?= htmlspecialchars(implode(', ', $cityState)) ?>
+          </div>
+        <?php endif; ?>
       <?php endif; ?>
 
       <hr class="divider">
@@ -220,9 +234,6 @@ function runFilter() {
     let show = false;
 
     if (activeMode === 'date' && rangeStart) {
-      // An event is included if its date range overlaps the selected range.
-      // Event must start on or before the selection end,
-      // and end on or after the selection start.
       const evStart = card.dataset.startdate;
       const evEnd   = card.dataset.enddate || evStart;
       const selEnd  = rangeEnd || rangeStart;
@@ -233,6 +244,10 @@ function runFilter() {
       show = card.dataset.event.includes(q);
     } else if (activeMode === 'venue') {
       show = card.dataset.venue.includes(q);
+    } else if (activeMode === 'city') {
+      show = card.dataset.city.includes(q);
+    } else if (activeMode === 'state') {
+      show = card.dataset.state.includes(q);
     } else if (activeMode === 'performer') {
       show = card.dataset.performers.includes(q);
     }
@@ -297,11 +312,9 @@ function fmtDisplay(iso) {
 }
 
 function renderCal() {
-  // Work out the effective range to highlight (start always <= end)
   let hiStart = tempStart;
   let hiEnd   = tempEnd;
 
-  // If we have a start but no confirmed end yet, use hover as preview end
   if (tempStart && !tempEnd && hoverISO) {
     if (hoverISO >= tempStart) {
       hiStart = tempStart;
@@ -312,7 +325,6 @@ function renderCal() {
     }
   }
 
-  // Update hint text
   const hint = document.getElementById('calHint');
   if (!tempStart) {
     hint.textContent = 'Click a start date';
@@ -322,14 +334,12 @@ function renderCal() {
     hint.textContent = `${fmtDisplay(tempStart)} → ${fmtDisplay(tempEnd)}`;
   }
 
-  // Month label
   document.getElementById('calMonthLabel').textContent =
     new Date(calYear, calMonth, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const grid = document.getElementById('calGrid');
   grid.innerHTML = '';
 
-  // Day-of-week headers
   ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].forEach(label => {
     const el = document.createElement('div');
     el.className = 'cal-day-label';
@@ -340,14 +350,12 @@ function renderCal() {
   const firstWeekday  = new Date(calYear, calMonth, 1).getDay();
   const daysThisMonth = new Date(calYear, calMonth + 1, 0).getDate();
 
-  // Empty leading cells
   for (let i = 0; i < firstWeekday; i++) {
     const el = document.createElement('div');
     el.className = 'cal-day empty';
     grid.appendChild(el);
   }
 
-  // Day cells
   for (let day = 1; day <= daysThisMonth; day++) {
     const iso = isoDate(calYear, calMonth, day);
     const el  = document.createElement('div');
@@ -368,7 +376,6 @@ function renderCal() {
         el.classList.add('in-range');
       }
     } else if (hiStart && iso === hiStart) {
-      // Single start selected, nothing hovered yet
       el.classList.add('range-start', 'range-end');
     }
 
@@ -376,13 +383,10 @@ function renderCal() {
 
     el.addEventListener('click', () => {
       if (!tempStart || (tempStart && tempEnd)) {
-        // No start yet, or starting fresh after a complete selection
         tempStart = iso;
         tempEnd   = null;
       } else {
-        // We have a start, now set the end
         if (iso < tempStart) {
-          // Clicked before start — swap
           tempEnd   = tempStart;
           tempStart = iso;
         } else {
@@ -398,7 +402,6 @@ function renderCal() {
 
 // Open modal
 datePickerBtn.addEventListener('click', () => {
-  // Pre-populate with any existing confirmed range
   tempStart = rangeStart;
   tempEnd   = rangeEnd;
   hoverISO  = null;
