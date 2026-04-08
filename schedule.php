@@ -113,8 +113,8 @@ $eventsJson = json_encode(array_values($events));
 <div class="card-grid" id="cardGrid">
   <?php foreach ($events as $event): ?>
     <?php
-      $start = $event['event_StartDate'] ? date('d M Y', strtotime($event['event_StartDate'])) : '—';
-      $end   = $event['event_EndDate']   ? date('d M Y', strtotime($event['event_EndDate']))   : null;
+      $start = $event['event_StartDate'] ? date('M d Y', strtotime($event['event_StartDate'])) : '—';
+      $end   = $event['event_EndDate']   ? date('M d Y', strtotime($event['event_EndDate']))   : null;
       $performers = array_map(fn($p) => $p['name'], $event['performers']);
     ?>
 
@@ -199,6 +199,44 @@ let activeMode  = 'event';
 let rangeStart  = null;  // confirmed ISO start
 let rangeEnd    = null;  // confirmed ISO end (null = single day)
 
+// ── Read URL parameters ────────────────────────────────────────────
+(function applyUrlParams() {
+  const params   = new URLSearchParams(window.location.search);
+  const category = (params.get('category') || '').toLowerCase().trim();
+  const q        = (params.get('q')        || '').trim();
+  const start    = (params.get('start')    || '').trim();
+  const end      = (params.get('end')      || '').trim();
+
+  const validModes = ['event', 'venue', 'city', 'state', 'performer', 'date'];
+
+  // Apply category tab
+  if (category && validModes.includes(category)) {
+    activeMode = category;
+    document.querySelectorAll('.filter-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.mode === category);
+    });
+  }
+
+  // Apply search text
+  if (q) {
+    searchInput.value = q;
+  }
+
+  // Apply date range (only meaningful when category=date)
+  if (activeMode === 'date') {
+    datePickerBtn.style.display = 'inline-block';
+    if (start) {
+      rangeStart = start;
+      rangeEnd   = end || null;
+      if (rangeStart && rangeEnd) {
+        datePickerBtn.textContent = `📅 ${fmtDisplay(rangeStart)} - ${fmtDisplay(rangeEnd)}`;
+      } else if (rangeStart) {
+        datePickerBtn.textContent = `📅 ${fmtDisplay(rangeStart)}`;
+      }
+    }
+  }
+})();
+
 // ── Filter tabs ────────────────────────────────────────────────────
 document.querySelectorAll('.filter-tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -211,8 +249,10 @@ document.querySelectorAll('.filter-tab').forEach(tab => {
   });
 });
 
-// Hide date picker button unless on Date tab
-datePickerBtn.style.display = 'none';
+// Hide date picker button unless on Date tab (only if not already shown by URL param)
+if (activeMode !== 'date') {
+  datePickerBtn.style.display = 'none';
+}
 
 // ── Search input ───────────────────────────────────────────────────
 searchInput.addEventListener('input', runFilter);
@@ -308,7 +348,8 @@ function isoDate(y, m, d) {
 function fmtDisplay(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y}`;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)} ${y}`;
 }
 
 function renderCal() {
@@ -331,7 +372,7 @@ function renderCal() {
   } else if (!tempEnd) {
     hint.textContent = `Start: ${fmtDisplay(tempStart)} — now pick an end date`;
   } else {
-    hint.textContent = `${fmtDisplay(tempStart)} → ${fmtDisplay(tempEnd)}`;
+    hint.textContent = `${fmtDisplay(tempStart)} - ${fmtDisplay(tempEnd)}`;
   }
 
   document.getElementById('calMonthLabel').textContent =
@@ -434,7 +475,7 @@ document.getElementById('calConfirm').addEventListener('click', () => {
   rangeStart = tempStart;
   rangeEnd   = tempEnd;
   if (rangeStart && rangeEnd) {
-    datePickerBtn.textContent = `📅 ${fmtDisplay(rangeStart)} → ${fmtDisplay(rangeEnd)}`;
+    datePickerBtn.textContent = `📅 ${fmtDisplay(rangeStart)} - ${fmtDisplay(rangeEnd)}`;
   } else if (rangeStart) {
     datePickerBtn.textContent = `📅 ${fmtDisplay(rangeStart)}`;
   }
