@@ -102,6 +102,12 @@ $eventsJson = json_encode(array_values($events));
     <button id="datePickerBtn">&#128197; Pick date</button>
     <button class="clear-btn" id="clearBtn">Clear</button>
   </div>
+  <!-- URL Builder -->
+  <div class="url-builder-wrap">
+    <span class="url-builder-label">URL</span>
+    <input type="text" id="urlBuilderInput" class="url-builder-input" readonly placeholder="Select a category and enter a search term…">
+    <button class="url-builder-copy" id="urlCopyBtn" title="Copy URL">&#10697;</button>
+  </div>
 </div>
 
 <p class="no-results" id="noResults">No events match your search.</p>
@@ -186,6 +192,59 @@ $eventsJson = json_encode(array_values($events));
 </div>
 <?php endif; ?>
 
+<style>
+/* ── URL Builder ───────────────────────────────────────────────────── */
+.url-builder-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 16px 0;
+  padding: 8px 12px;
+  background: var(--url-builder-bg, rgba(255,255,255,0.04));
+  border: 1px solid var(--url-builder-border, rgba(255,255,255,0.09));
+  border-radius: 10px;
+}
+.url-builder-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+.url-builder-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 0.82rem;
+  font-family: monospace;
+  color: var(--url-builder-text, inherit);
+  opacity: 0.75;
+  cursor: text;
+  min-width: 0;
+}
+.url-builder-input::placeholder {
+  opacity: 0.35;
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+.url-builder-copy {
+  background: none;
+  border: 1px solid var(--url-builder-border, rgba(255,255,255,0.12));
+  border-radius: 7px;
+  padding: 3px 9px;
+  font-size: 1rem;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.url-builder-copy:hover  { opacity: 1; background: rgba(255,255,255,0.08); }
+.url-builder-copy.copied { opacity: 1; color: #4caf50; border-color: #4caf50; }
+</style>
+
 <script>
 const allEvents   = <?= $eventsJson ?>;
 const cards       = () => document.querySelectorAll('#cardGrid .card');
@@ -194,10 +253,45 @@ const noResults   = document.getElementById('noResults');
 const searchInput = document.getElementById('searchInput');
 const clearBtn    = document.getElementById('clearBtn');
 const datePickerBtn = document.getElementById('datePickerBtn');
+const urlBuilderInput = document.getElementById('urlBuilderInput');
+const urlCopyBtn      = document.getElementById('urlCopyBtn');
 
 let activeMode  = 'event';
 let rangeStart  = null;  // confirmed ISO start
 let rangeEnd    = null;  // confirmed ISO end (null = single day)
+
+// ── URL Builder ────────────────────────────────────────────────────
+function buildUrl() {
+  const base   = window.location.pathname.split('/').pop() || 'schedule.php';
+  const params = new URLSearchParams();
+
+  params.set('category', activeMode);
+
+  if (activeMode === 'date') {
+    if (rangeStart) params.set('start', rangeStart);
+    if (rangeEnd)   params.set('end',   rangeEnd);
+  } else {
+    const q = searchInput.value.trim();
+    if (q) params.set('q', q);
+  }
+
+  const hasFilter = activeMode === 'date' ? rangeStart : searchInput.value.trim();
+  urlBuilderInput.value = hasFilter ? `${base}?${params.toString()}` : '';
+}
+
+// Copy button
+urlCopyBtn.addEventListener('click', () => {
+  const val = urlBuilderInput.value;
+  if (!val) return;
+  navigator.clipboard.writeText(val).then(() => {
+    urlCopyBtn.classList.add('copied');
+    urlCopyBtn.textContent = '✓';
+    setTimeout(() => {
+      urlCopyBtn.classList.remove('copied');
+      urlCopyBtn.innerHTML = '&#10697;';
+    }, 1500);
+  });
+});
 
 // ── Read URL parameters ────────────────────────────────────────────
 (function applyUrlParams() {
@@ -298,6 +392,7 @@ function runFilter() {
 
   countEl.textContent = visible + ' event' + (visible !== 1 ? 's' : '');
   noResults.style.display = visible === 0 ? 'block' : 'none';
+  buildUrl();
 }
 
 // ── Build calendar modal ───────────────────────────────────────────
