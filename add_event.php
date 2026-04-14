@@ -97,7 +97,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <title>Add Event – Croven Events</title>
   <link rel="stylesheet" href="styles.css">
   <style>
-    /* ── Page layout ─────────────────────────────────────────────── */
+    /* ── Page subheader ──────────────────────────────────────────── */
+    .page-subheader {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 0.25rem;
+    }
+
+    /* ── Select inputs ───────────────────────────────────────────── */
+    .field select {
+      padding: 8px 10px;
+      border: 0.5px solid var(--border-strong);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--input-bg);
+      color: var(--text);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+      width: 100%;
+      appearance: none;
+      cursor: pointer;
+    }
+    .field select:focus {
+      border-color: var(--accent);
+      background: var(--card-bg);
+    }
+    body.red .field select { color: #ff2b2b; }
+
+    /* ── Page heading ────────────────────────────────────────────── */
     .add-event-wrap {
       max-width: 620px;
       margin: 0 auto;
@@ -459,7 +488,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   require 'nav.php';
 ?>
 
-<main class="add-event-wrap">
+<div class="add-event-wrap">
+
+  <div class="page-subheader">
+    <span class="record-count">Add Event</span>
+  </div>
 
   <div>
     <h2 class="page-heading">Add Event</h2>
@@ -566,7 +599,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <button type="submit" class="btn-submit">Save Event</button>
 
   </form>
-</main>
+</div>
 
 <script>
 let count = 0;

@@ -4,6 +4,11 @@
 //   require_once 'db.php';
 // ─────────────────────────────────────────────────────────────────────
 
+// ─── Session ────────────────────────────────────────────────────────
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 // ─── DB Configuration ───────────────────────────────────────────────
 define('DB_HOST',    'localhost');
 define('DB_NAME',    'croven_events');
