@@ -118,9 +118,9 @@ $totalPerformers = count($performerStats);
 $totalVenues     = count($venueStats);
 $totalYears      = count($yearStats);
 
-$eventsJson    = json_encode(array_values($events));
-$performerJson = json_encode(array_values($performerStats));
-$venueJson     = json_encode(array_values($venueStats));
+$eventsJson    = json_encode(array_values($events),        JSON_HEX_TAG | JSON_HEX_AMP);
+$performerJson = json_encode(array_values($performerStats), JSON_HEX_TAG | JSON_HEX_AMP);
+$venueJson     = json_encode(array_values($venueStats),     JSON_HEX_TAG | JSON_HEX_AMP);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -145,8 +145,8 @@ $venueJson     = json_encode(array_values($venueStats));
       margin: 20px 0 28px;
     }
     .summary-tile {
-      background: var(--card-bg, rgba(255,255,255,0.05));
-      border: 1px solid var(--card-border, rgba(255,255,255,0.1));
+      background: var(--card-bg);
+      border: 1px solid var(--border);
       border-radius: 14px;
       padding: 18px 20px 16px;
       text-align: center;
@@ -174,7 +174,7 @@ $venueJson     = json_encode(array_values($venueStats));
     .stats-tab {
       padding: 8px 18px;
       border-radius: 20px;
-      border: 1px solid var(--card-border, rgba(255,255,255,0.12));
+      border: 1px solid var(--border-strong);
       cursor: pointer;
       font-size: 0.85rem;
       font-weight: 600;
@@ -216,8 +216,8 @@ $venueJson     = json_encode(array_values($venueStats));
       box-sizing: border-box;
       padding: 10px 14px 10px 36px;
       border-radius: 10px;
-      border: 1px solid var(--card-border, rgba(255,255,255,0.12));
-      background: var(--card-bg, rgba(255,255,255,0.04));
+      border: 1px solid var(--border-strong);
+      background: var(--card-bg);
       color: inherit;
       font-size: 0.95rem;
       outline: none;
@@ -226,7 +226,7 @@ $venueJson     = json_encode(array_values($venueStats));
     .stats-clear-btn {
       padding: 9px 16px;
       border-radius: 10px;
-      border: 1px solid var(--card-border, rgba(255,255,255,0.12));
+      border: 1px solid var(--border-strong);
       background: transparent;
       color: inherit;
       font-size: 0.85rem;
@@ -247,8 +247,8 @@ $venueJson     = json_encode(array_values($venueStats));
 
     /* ── Performer / Venue cards ─────────────────────────────────── */
     .stats-card {
-      background: var(--card-bg, rgba(255,255,255,0.04));
-      border: 1px solid var(--card-border, rgba(255,255,255,0.1));
+      background: var(--card-bg);
+      border: 1px solid var(--border);
       border-radius: 14px;
       margin-bottom: 14px;
       overflow: hidden;
@@ -280,7 +280,7 @@ $venueJson     = json_encode(array_values($venueStats));
       flex-shrink: 0;
     }
     .badge-count {
-      background: var(--accent-bg, rgba(255,255,255,0.1));
+      background: var(--input-bg);
       border-radius: 20px;
       padding: 3px 11px;
       font-size: 0.8rem;
@@ -305,7 +305,7 @@ $venueJson     = json_encode(array_values($venueStats));
     /* ── Expandable detail ───────────────────────────────────────── */
     .stats-card-detail {
       display: none;
-      border-top: 1px solid var(--card-border, rgba(255,255,255,0.08));
+      border-top: 1px solid var(--border);
       padding: 14px 18px 16px;
     }
     .stats-card.open .stats-card-detail { display: block; }
@@ -324,12 +324,12 @@ $venueJson     = json_encode(array_values($venueStats));
       opacity: 0.4;
       padding: 0 8px 8px 0;
       font-weight: 600;
-      border-bottom: 1px solid var(--card-border, rgba(255,255,255,0.08));
+      border-bottom: 1px solid var(--border);
     }
     .appearance-table td {
       padding: 8px 8px 8px 0;
       vertical-align: top;
-      border-bottom: 1px solid var(--card-border, rgba(255,255,255,0.05));
+      border-bottom: 1px solid var(--border);
     }
     .appearance-table tr:last-child td { border-bottom: none; }
     .td-date { opacity: 0.55; white-space: nowrap; }
@@ -362,8 +362,8 @@ $venueJson     = json_encode(array_values($venueStats));
 
     /* ── Year view ───────────────────────────────────────────────── */
     .year-block {
-      background: var(--card-bg, rgba(255,255,255,0.04));
-      border: 1px solid var(--card-border, rgba(255,255,255,0.1));
+      background: var(--card-bg);
+      border: 1px solid var(--border);
       border-radius: 14px;
       margin-bottom: 14px;
       overflow: hidden;
@@ -380,7 +380,7 @@ $venueJson     = json_encode(array_values($venueStats));
     .year-block-title { font-weight: 700; font-size: 1.1rem; }
     .year-block-detail {
       display: none;
-      border-top: 1px solid var(--card-border, rgba(255,255,255,0.08));
+      border-top: 1px solid var(--border);
       padding: 12px 18px 14px;
     }
     .year-block.open .year-block-detail { display: block; }
@@ -388,7 +388,7 @@ $venueJson     = json_encode(array_values($venueStats));
     .year-event-item {
       padding: 5px 0;
       font-size: 0.88rem;
-      border-bottom: 1px solid var(--card-border, rgba(255,255,255,0.05));
+      border-bottom: 1px solid var(--border);
       opacity: 0.8;
     }
     .year-event-item:last-child { border-bottom: none; }
@@ -401,7 +401,7 @@ $venueJson     = json_encode(array_values($venueStats));
       align-items: center;
       gap: 8px;
       padding: 5px 0;
-      border-bottom: 1px solid var(--card-border, rgba(255,255,255,0.06));
+      border-bottom: 1px solid var(--border);
       font-size: 0.85rem;
     }
     .tile-list-row:last-child { border-bottom: none; }

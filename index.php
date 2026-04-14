@@ -2,9 +2,23 @@
 require_once 'db.php';
 
 // ─── Quick stats for the home page ──────────────────────────────────
-$totalEvents    = $pdo->query("SELECT COUNT(DISTINCT event_ID) FROM vw_full_event")->fetchColumn();
-$totalPerformers= $pdo->query("SELECT COUNT(DISTINCT performer_Name) FROM vw_full_event WHERE performer_Name IS NOT NULL")->fetchColumn();
-$totalWatched   = $pdo->query("SELECT COUNT(DISTINCT performer_Name) FROM vw_full_event WHERE watched = 1")->fetchColumn();
+$totalEvents     = $pdo->query("SELECT COUNT(DISTINCT event_ID) FROM vw_full_event")->fetchColumn();
+$totalPerformers = $pdo->query("SELECT COUNT(DISTINCT performer_Name) FROM vw_full_event WHERE performer_Name IS NOT NULL")->fetchColumn();
+
+// watched count is per-user — filter by session user if set
+$sessionUser = $_SESSION['nav_user'] ?? '';
+if ($sessionUser !== '') {
+    $watchedStmt = $pdo->prepare("
+        SELECT COUNT(DISTINCT vfe.performer_Name)
+        FROM vw_full_event vfe
+        JOIN users u ON u.name = ?
+        WHERE vfe.watched = 1
+    ");
+    $watchedStmt->execute([$sessionUser]);
+    $totalWatched = $watchedStmt->fetchColumn();
+} else {
+    $totalWatched = $pdo->query("SELECT COUNT(DISTINCT performer_Name) FROM vw_full_event WHERE watched = 1")->fetchColumn();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -23,7 +37,7 @@ $totalWatched   = $pdo->query("SELECT COUNT(DISTINCT performer_Name) FROM vw_ful
 ?>
 
 <!-- ══ Home content ══════════════════════════════════════════════════ -->
-<main class="home-wrap">
+<div class="home-wrap">
 
   <div class="home-hero">
     <div class="home-hero-icon">🎶</div>
@@ -59,7 +73,7 @@ $totalWatched   = $pdo->query("SELECT COUNT(DISTINCT performer_Name) FROM vw_ful
     <!-- Add more nav cards here as you add pages -->
   </div>
 
-</main>
+</div>
 
 </body>
 </html>

@@ -19,7 +19,11 @@ try {
 // ─── Selected user (persisted via GET param or session) ──────────────
 $selectedUser = $_GET['nav_user'] ?? ($_SESSION['nav_user'] ?? '');
 if (isset($_GET['nav_user'])) {
-    $_SESSION['nav_user'] = $_GET['nav_user'];
+    if ($_GET['nav_user'] === '') {
+        unset($_SESSION['nav_user']);
+    } else {
+        $_SESSION['nav_user'] = $_GET['nav_user'];
+    }
     $selectedUser = $_GET['nav_user'];
 }
 
@@ -41,7 +45,7 @@ $navItems = [
     'home'     => ['label' => 'Home',     'href' => 'index.php',    'icon' => '🏠'],
     'schedule' => ['label' => 'Schedule', 'href' => 'schedule.php', 'icon' => '📅'],
     'stats' => ['label' => 'Stats', 'href' => 'stats.php', 'icon' => '📜'],
-    'new' => ['label' => 'new', 'href' => 'add_event.php', 'icon' => '🎤'],
+    'new' => ['label' => 'Add Event', 'href' => 'add_event.php', 'icon' => '➕'],
     // Add more pages here, e.g.:
     // 'artists' => ['label' => 'Artists', 'href' => 'artists.php', 'icon' => '🎤'],
     // 'venues'  => ['label' => 'Venues',  'href' => 'venues.php',  'icon' => '📍'],
