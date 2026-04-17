@@ -45,7 +45,8 @@ $navItems = [
     'home'     => ['label' => 'Home',     'href' => 'index.php',    'icon' => '🏠'],
     'schedule' => ['label' => 'Schedule', 'href' => 'schedule.php', 'icon' => '📅'],
     'stats' => ['label' => 'Stats', 'href' => 'stats.php', 'icon' => '📜'],
-    'new' => ['label' => 'Add Event', 'href' => 'add_event.php', 'icon' => '➕'],
+    'new'       => ['label' => 'Add Event', 'href' => 'add_event.php',  'icon' => '➕'],
+    'favorites' => ['label' => 'Favorites', 'href' => 'favorites.php', 'icon' => '⭐'],
     // Add more pages here, e.g.:
     // 'artists' => ['label' => 'Artists', 'href' => 'artists.php', 'icon' => '🎤'],
     // 'venues'  => ['label' => 'Venues',  'href' => 'venues.php',  'icon' => '📍'],
