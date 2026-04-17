@@ -112,6 +112,9 @@ foreach ($yearStats as &$y) {
 unset($y);
 krsort($yearStats);
 
+// ─── All distinct years (for the top year-filter bar) ────────────────
+$allYears = array_keys($yearStats); // already krsort'd descending
+
 // ─── Summary stats ───────────────────────────────────────────────────
 $totalEvents     = count($events);
 $totalPerformers = count($performerStats);
@@ -121,6 +124,7 @@ $totalYears      = count($yearStats);
 $eventsJson    = json_encode(array_values($events),        JSON_HEX_TAG | JSON_HEX_AMP);
 $performerJson = json_encode(array_values($performerStats), JSON_HEX_TAG | JSON_HEX_AMP);
 $venueJson     = json_encode(array_values($venueStats),     JSON_HEX_TAG | JSON_HEX_AMP);
+$yearsJson     = json_encode($allYears,                     JSON_HEX_TAG | JSON_HEX_AMP);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -436,6 +440,84 @@ $venueJson     = json_encode(array_values($venueStats),     JSON_HEX_TAG | JSON_
     /* ── Section hidden ──────────────────────────────────────────── */
     .stats-section { display: none; }
     .stats-section.active { display: block; }
+
+    /* ── Year filter bar (top of page) ──────────────────────────── */
+    .year-filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 20px 0 0;
+      align-items: center;
+    }
+    .year-filter-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      opacity: 0.4;
+      margin-right: 4px;
+    }
+    .year-pill {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border-strong);
+      background: transparent;
+      color: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      opacity: 0.5;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    .year-pill:hover:not(.active) { opacity: 0.8; }
+    .year-pill.active {
+      opacity: 1;
+      background: var(--accent, rgba(255,255,255,0.12));
+      border-color: transparent;
+    }
+
+    /* ── Sort controls (below section tabs) ─────────────────────── */
+    .sort-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .sort-controls.hidden { display: none; }
+    .sort-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      opacity: 0.4;
+      margin-right: 2px;
+    }
+    .sort-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border-strong);
+      background: transparent;
+      color: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      opacity: 0.5;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    .sort-btn:hover:not(.active) { opacity: 0.8; }
+    .sort-btn.active {
+      opacity: 1;
+      background: rgba(255,255,255,0.08);
+      border-color: var(--border-strong);
+    }
+    .sort-arrow {
+      display: inline-block;
+      margin-left: 5px;
+      font-size: 0.85em;
+      transition: opacity 0.15s;
+    }
+    .sort-btn:not(.active) .sort-arrow { opacity: 0.4; }
   </style>
 </head>
 <body>
@@ -448,29 +530,41 @@ $venueJson     = json_encode(array_values($venueStats),     JSON_HEX_TAG | JSON_
 
 <div class="stats-wrap">
 
+  <!-- Year Filter Bar -->
+  <div class="year-filter-bar" id="yearFilterBar">
+    <span class="year-filter-label">Year</span>
+    <button class="year-pill active" data-year="all">All</button>
+    <?php foreach ($allYears as $yr): ?>
+      <button class="year-pill" data-year="<?= htmlspecialchars((string)$yr) ?>"><?= htmlspecialchars((string)$yr) ?></button>
+    <?php endforeach; ?>
+  </div>
+
   <!-- Summary Tiles -->
   <?php
     $top5Performers = array_slice(array_values($performerStats), 0, 5);
     $top5Venues     = array_slice(array_values($venueStats), 0, 5);
   ?>
-  <div class="summary-grid">
+  <div class="summary-grid" id="summaryGrid">
     <div class="summary-tile summary-tile-list">
       <div class="tile-label" style="margin-bottom:10px;">Overview</div>
+      <div id="overviewRows">
       <div class="tile-list-row">
         <span class="tile-list-name" style="font-weight:400;">Total Events</span>
-        <span class="tile-list-count" style="opacity:1; font-size:0.9rem;"><?= $totalEvents ?></span>
+        <span class="tile-list-count" style="opacity:1; font-size:0.9rem;" id="summaryEvents"><?= $totalEvents ?></span>
       </div>
       <div class="tile-list-row">
         <span class="tile-list-name" style="font-weight:400;">Unique Performers</span>
-        <span class="tile-list-count" style="opacity:1; font-size:0.9rem;"><?= $totalPerformers ?></span>
+        <span class="tile-list-count" style="opacity:1; font-size:0.9rem;" id="summaryPerformers"><?= $totalPerformers ?></span>
       </div>
       <div class="tile-list-row">
         <span class="tile-list-name" style="font-weight:400;">Unique Venues</span>
-        <span class="tile-list-count" style="opacity:1; font-size:0.9rem;"><?= $totalVenues ?></span>
+        <span class="tile-list-count" style="opacity:1; font-size:0.9rem;" id="summaryVenues"><?= $totalVenues ?></span>
       </div>
+      </div><!-- /overviewRows -->
     </div>
     <div class="summary-tile summary-tile-list">
       <div class="tile-label" style="margin-bottom:10px;">Top Performers</div>
+      <div id="topPerformersList">
       <?php foreach ($top5Performers as $i => $tp): ?>
         <div class="tile-list-row">
           <span class="tile-list-rank"><?= $i + 1 ?></span>
@@ -478,9 +572,11 @@ $venueJson     = json_encode(array_values($venueStats),     JSON_HEX_TAG | JSON_
           <span class="tile-list-count"><?= $tp['total'] ?>×</span>
         </div>
       <?php endforeach; ?>
+      </div><!-- /topPerformersList -->
     </div>
     <div class="summary-tile summary-tile-list">
       <div class="tile-label" style="margin-bottom:10px;">Top Venues</div>
+      <div id="topVenuesList">
       <?php foreach ($top5Venues as $i => $tv): ?>
         <div class="tile-list-row">
           <span class="tile-list-rank"><?= $i + 1 ?></span>
@@ -488,14 +584,26 @@ $venueJson     = json_encode(array_values($venueStats),     JSON_HEX_TAG | JSON_
           <span class="tile-list-count"><?= $tv['total'] ?>×</span>
         </div>
       <?php endforeach; ?>
+      </div><!-- /topVenuesList -->
     </div>
-  </div>
+  </div><!-- /summaryGrid -->
 
   <!-- Mode Tabs -->
   <div class="stats-tabs">
     <button class="stats-tab active" data-mode="performer">By Performer</button>
     <button class="stats-tab" data-mode="venue">By Venue</button>
     <button class="stats-tab" data-mode="year">By Year</button>
+  </div>
+
+  <!-- Sort Controls -->
+  <div class="sort-controls" id="sortControls">
+    <span class="sort-label">Order</span>
+    <button class="sort-btn active" id="sortCount" data-sort="count-desc">
+      Performance Count <span class="sort-arrow" id="sortCountArrow">↓</span>
+    </button>
+    <button class="sort-btn" id="sortAlpha" data-sort="alpha-asc">
+      A → Z <span class="sort-arrow" id="sortAlphaArrow">↑</span>
+    </button>
   </div>
 
   <!-- Search -->
@@ -512,8 +620,11 @@ $venueJson     = json_encode(array_values($venueStats),     JSON_HEX_TAG | JSON_
   <!-- ── Performer Section ───────────────────────────────────────────── -->
   <div class="stats-section active" id="section-performer">
     <?php foreach ($performerStats as $p): ?>
+    <?php $pYears = array_unique(array_filter(array_column($p['appearances'], 'event_Year'))); ?>
     <div class="stats-card"
-         data-name="<?= htmlspecialchars(strtolower($p['name'])) ?>">
+         data-name="<?= htmlspecialchars(strtolower($p['name'])) ?>"
+         data-years="<?= htmlspecialchars(implode(',', $pYears)) ?>"
+         data-total="<?= $p['total'] ?>">
       <div class="stats-card-header" onclick="toggleCard(this)">
         <div>
           <div class="stats-card-title"><?= htmlspecialchars($p['name']) ?></div>
@@ -577,8 +688,11 @@ $venueJson     = json_encode(array_values($venueStats),     JSON_HEX_TAG | JSON_
   <!-- ── Venue Section ───────────────────────────────────────────────── -->
   <div class="stats-section" id="section-venue">
     <?php foreach ($venueStats as $v): ?>
+    <?php $vYears = array_unique(array_column($v['appearances'], 'year')); ?>
     <div class="stats-card"
-         data-name="<?= htmlspecialchars(strtolower($v['name'] . ' ' . ($v['city'] ?? '') . ' ' . ($v['state'] ?? ''))) ?>">
+         data-name="<?= htmlspecialchars(strtolower($v['name'] . ' ' . ($v['city'] ?? '') . ' ' . ($v['state'] ?? ''))) ?>"
+         data-years="<?= htmlspecialchars(implode(',', $vYears)) ?>"
+         data-total="<?= $v['total'] ?>">
       <div class="stats-card-header" onclick="toggleCard(this)">
         <div>
           <div class="stats-card-title"><?= htmlspecialchars($v['name']) ?></div>
@@ -700,11 +814,84 @@ $venueJson     = json_encode(array_values($venueStats),     JSON_HEX_TAG | JSON_
 </div><!-- /stats-wrap -->
 
 <script>
-let activeMode = 'performer';
+// ── Data from PHP ──────────────────────────────────────────────────
+const allEvents    = <?= $eventsJson ?>;
+const allPerformers = <?= $performerJson ?>;
+const allVenues    = <?= $venueJson ?>;
+
+let activeMode   = 'performer';
+let activeYear   = 'all';
+let activeSort   = 'count-desc';
 
 // ── Toggle expand/collapse ─────────────────────────────────────────
 function toggleCard(headerEl) {
   headerEl.closest('.stats-card, .year-block').classList.toggle('open');
+}
+
+// ── Year filter pills ──────────────────────────────────────────────
+document.querySelectorAll('.year-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.year-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    activeYear = pill.dataset.year;
+    updateSummary();
+    applyFiltersAndSort();
+  });
+});
+
+// ── Update summary tiles based on selected year ────────────────────
+function updateSummary() {
+  const filtered = activeYear === 'all'
+    ? allEvents
+    : allEvents.filter(ev => String(ev.event_Year) === String(activeYear));
+
+  // Count unique events, performers, venues in filtered set
+  const evCount = filtered.length;
+
+  const perfSet = new Set();
+  const venueSet = new Set();
+  filtered.forEach(ev => {
+    if (ev.venue_Name) venueSet.add(ev.venue_Name);
+    (ev.performers || []).forEach(p => perfSet.add(p.name));
+  });
+
+  document.getElementById('summaryEvents').textContent     = evCount;
+  document.getElementById('summaryPerformers').textContent = perfSet.size;
+  document.getElementById('summaryVenues').textContent     = venueSet.size;
+
+  // Recompute top 5 performers for this year
+  const perfCounts = {};
+  filtered.forEach(ev => {
+    (ev.performers || []).forEach(p => {
+      perfCounts[p.name] = (perfCounts[p.name] || 0) + 1;
+    });
+  });
+  const sortedPerfs = Object.entries(perfCounts).sort((a,b) => b[1]-a[1]).slice(0,5);
+  const perfList = document.getElementById('topPerformersList');
+  perfList.innerHTML = sortedPerfs.map(([name, cnt], i) => `
+    <div class="tile-list-row">
+      <span class="tile-list-rank">${i+1}</span>
+      <span class="tile-list-name">${escHtml(name)}</span>
+      <span class="tile-list-count">${cnt}×</span>
+    </div>`).join('');
+
+  // Recompute top 5 venues for this year
+  const venueCounts = {};
+  filtered.forEach(ev => {
+    if (ev.venue_Name) venueCounts[ev.venue_Name] = (venueCounts[ev.venue_Name] || 0) + 1;
+  });
+  const sortedVenues = Object.entries(venueCounts).sort((a,b) => b[1]-a[1]).slice(0,5);
+  const venueList = document.getElementById('topVenuesList');
+  venueList.innerHTML = sortedVenues.map(([name, cnt], i) => `
+    <div class="tile-list-row">
+      <span class="tile-list-rank">${i+1}</span>
+      <span class="tile-list-name">${escHtml(name)}</span>
+      <span class="tile-list-count">${cnt}×</span>
+    </div>`).join('');
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ── Mode tabs ──────────────────────────────────────────────────────
@@ -716,46 +903,120 @@ document.querySelectorAll('.stats-tab').forEach(tab => {
     document.querySelectorAll('.stats-section').forEach(s => s.classList.remove('active'));
     document.getElementById('section-' + activeMode).classList.add('active');
     document.getElementById('statsSearch').value = '';
-    runSearch();
+    // Show/hide sort controls — only relevant for performer and venue
+    document.getElementById('sortControls').classList.toggle('hidden', activeMode === 'year');
+    applyFiltersAndSort();
   });
 });
+
+// ── Sort buttons (toggle) ─────────────────────────────────────────
+const sortCountBtn  = document.getElementById('sortCount');
+const sortAlphaBtn  = document.getElementById('sortAlpha');
+const sortCountArrow = document.getElementById('sortCountArrow');
+const sortAlphaArrow = document.getElementById('sortAlphaArrow');
+
+sortCountBtn.addEventListener('click', () => {
+  // Toggle between count-desc and count-asc
+  const next = activeSort === 'count-desc' ? 'count-asc' : 'count-desc';
+  setSort(next);
+});
+
+sortAlphaBtn.addEventListener('click', () => {
+  // Toggle between alpha-asc and alpha-desc
+  const next = activeSort === 'alpha-asc' ? 'alpha-desc' : 'alpha-asc';
+  setSort(next);
+});
+
+function setSort(sort) {
+  activeSort = sort;
+
+  // Update active state
+  sortCountBtn.classList.toggle('active', sort === 'count-desc' || sort === 'count-asc');
+  sortAlphaBtn.classList.toggle('active', sort === 'alpha-asc'  || sort === 'alpha-desc');
+
+  // Update arrows
+  sortCountArrow.textContent = sort === 'count-asc' ? '↑' : '↓';
+  sortAlphaArrow.textContent = sort === 'alpha-desc' ? '↓' : '↑';
+
+  applyFiltersAndSort();
+}
 
 // ── Search ─────────────────────────────────────────────────────────
 const searchInput = document.getElementById('statsSearch');
 const clearBtn    = document.getElementById('statsClear');
 const resultCount = document.getElementById('resultCount');
 
-searchInput.addEventListener('input', runSearch);
+searchInput.addEventListener('input', applyFiltersAndSort);
 clearBtn.addEventListener('click', () => {
   searchInput.value = '';
-  runSearch();
+  applyFiltersAndSort();
 });
 
-function runSearch() {
-  const q = searchInput.value.trim().toLowerCase();
+// ── Core filter + sort + render ────────────────────────────────────
+function applyFiltersAndSort() {
+  const q       = searchInput.value.trim().toLowerCase();
   const section = document.getElementById('section-' + activeMode);
-  const cards   = section.querySelectorAll('.stats-card, .year-block');
   const noEl    = section.querySelector('.no-stats-results');
 
-  let visible = 0;
-  cards.forEach(card => {
-    const name  = card.dataset.name || '';
-    const match = !q || name.includes(q);
-    card.style.display = match ? '' : 'none';
-    if (match) visible++;
+  if (activeMode === 'year') {
+    // Year section: only search filter, no year-pill filter (year IS the grouping)
+    const cards = section.querySelectorAll('.year-block');
+    let visible = 0;
+    cards.forEach(card => {
+      const match = !q || (card.dataset.name || '').includes(q);
+      card.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    if (noEl) noEl.style.display = visible === 0 ? 'block' : 'none';
+    resultCount.textContent = q
+      ? `${visible} year${visible !== 1 ? 's' : ''} matching "${q}"`
+      : `${visible} year${visible !== 1 ? 's' : ''}`;
+    return;
+  }
+
+  // Performer or Venue: apply year filter + search + sort
+  const cards = Array.from(section.querySelectorAll('.stats-card'));
+
+  // Filter
+  const filtered = cards.filter(card => {
+    const nameMatch  = !q || (card.dataset.name || '').includes(q);
+    const yearMatch  = activeYear === 'all' || (card.dataset.years || '').split(',').includes(String(activeYear));
+    return nameMatch && yearMatch;
+  });
+  const hidden = cards.filter(c => !filtered.includes(c));
+  hidden.forEach(c => c.style.display = 'none');
+
+  // Sort
+  filtered.sort((a, b) => {
+    const totalA = parseInt(a.dataset.total || '0', 10);
+    const totalB = parseInt(b.dataset.total || '0', 10);
+    const nameA  = (a.querySelector('.stats-card-title')?.textContent || '').toLowerCase();
+    const nameB  = (b.querySelector('.stats-card-title')?.textContent || '').toLowerCase();
+    switch (activeSort) {
+      case 'count-desc': return totalB - totalA || nameA.localeCompare(nameB);
+      case 'count-asc':  return totalA - totalB || nameA.localeCompare(nameB);
+      case 'alpha-asc':  return nameA.localeCompare(nameB);
+      case 'alpha-desc': return nameB.localeCompare(nameA);
+      default:           return 0;
+    }
   });
 
-  if (noEl) noEl.style.display = visible === 0 ? 'block' : 'none';
+  // Re-insert in sorted order before the noEl
+  filtered.forEach(card => {
+    card.style.display = '';
+    section.insertBefore(card, noEl);
+  });
 
-  const label = activeMode === 'performer' ? 'performer' :
-                activeMode === 'venue'     ? 'venue'     : 'year';
-  resultCount.textContent = q
-    ? `${visible} ${label}${visible !== 1 ? 's' : ''} matching "${q}"`
-    : `${visible} ${label}${visible !== 1 ? 's' : ''}`;
+  if (noEl) noEl.style.display = filtered.length === 0 ? 'block' : 'none';
+
+  const label = activeMode === 'performer' ? 'performer' : 'venue';
+  resultCount.textContent = q || activeYear !== 'all'
+    ? `${filtered.length} ${label}${filtered.length !== 1 ? 's' : ''}${q ? ` matching "${q}"` : ''}${activeYear !== 'all' ? ` in ${activeYear}` : ''}`
+    : `${filtered.length} ${label}${filtered.length !== 1 ? 's' : ''}`;
 }
 
-// Initial count
-runSearch();
+// ── Init ───────────────────────────────────────────────────────────
+applyFiltersAndSort();
 </script>
 
 </body>

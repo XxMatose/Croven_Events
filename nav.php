@@ -82,10 +82,10 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
 
   <!-- ── User dropdown ── -->
   <div class="nav-user-section">
-    <label class="nav-user-label" for="navUserSelect">Viewing as</label>
+    <label class="nav-user-label" for="navUserSelect">User</label>
     <div class="nav-user-select-wrap">
       <select class="nav-user-select" id="navUserSelect">
-        <option value="">Everyone</option>
+        <option value="">All</option>
         <?php foreach ($users as $user): ?>
           <option value="<?= htmlspecialchars($user) ?>"
             <?= $selectedUser === $user ? 'selected' : '' ?>>
@@ -355,7 +355,8 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
       if (userSelect.value) {
         url.searchParams.set('nav_user', userSelect.value);
       } else {
-        url.searchParams.delete('nav_user');
+        // Explicitly pass empty nav_user so the PHP session is cleared
+        url.searchParams.set('nav_user', '');
       }
       window.location.href = url.toString();
     });
