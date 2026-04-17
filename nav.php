@@ -47,6 +47,7 @@ $navItems = [
     'stats' => ['label' => 'Stats', 'href' => 'stats.php', 'icon' => '📜'],
     'new'       => ['label' => 'Add Event', 'href' => 'add_event.php',  'icon' => '➕'],
     'favorites' => ['label' => 'Favorites', 'href' => 'favorites.php', 'icon' => '⭐'],
+    'admin'     => ['label' => 'Admin',     'href' => 'admin.php',     'icon' => '🛠️'],
     // Add more pages here, e.g.:
     // 'artists' => ['label' => 'Artists', 'href' => 'artists.php', 'icon' => '🎤'],
     // 'venues'  => ['label' => 'Venues',  'href' => 'venues.php',  'icon' => '📍'],
