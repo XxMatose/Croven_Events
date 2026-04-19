@@ -1,10 +1,6 @@
 <?php
 require_once 'db.php';
 
-// ─── Handle form submission ──────────────────────────────────────────
-$message = '';
-$msgType = '';
-
 // ─── Fetch all venues for the dropdown ──────────────────────────────
 $venues = [];
 try {
@@ -18,76 +14,6 @@ try {
     $pStmt = $pdo->query("SELECT performer_ID, performer_Name FROM performer ORDER BY performer_Name");
     $performers = $pStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) { /* skip */ }
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    try {
-        $eventName    = trim($_POST['event_name']    ?? '');
-        $startDate    = $_POST['start_date']         ?? '';
-        $endDate      = $_POST['end_date']            ?? '';
-        $venueName    = trim($_POST['venue_name']    ?? '');
-        $venueAddress = trim($_POST['venue_address'] ?? '');
-        $venueCity    = trim($_POST['venue_city']    ?? '');
-        $venueState   = trim($_POST['venue_state']   ?? '');
-        $venueType    = trim($_POST['venue_type']    ?? '');
-
-        $performerNames   = $_POST['performer_name']      ?? [];
-        $performerOrders  = $_POST['performer_order']     ?? [];
-        $performerHead    = $_POST['performer_headliner'] ?? [];
-        $performerOpener  = $_POST['performer_opener']    ?? [];
-        $performerWatched = $_POST['performer_watched']   ?? [];
-
-        if (!$eventName || !$startDate || !$venueName || !$venueCity || !$venueState) {
-            throw new Exception("Please fill in all required fields.");
-        }
-
-        $endDate    = $endDate ?: $startDate;
-        $addedCount = 0;
-
-        foreach ($performerNames as $i => $pName) {
-            $pName = trim($pName);
-            if ($pName === '') continue;
-
-            $order     = (int)($performerOrders[$i] ?? ($i + 1));
-            $isHead    = in_array($i, $performerHead)    ? 1 : 0;
-            $isOpener  = in_array($i, $performerOpener)  ? 1 : 0;
-            $isWatched = in_array($i, $performerWatched) ? 1 : 0;
-
-            $stmt = $pdo->prepare("CALL sp_AddEventWithPerformer(
-                :vName, :vAddr, :vCity, :vState, :vType,
-                :eName, :eStart, :eEnd,
-                :pName, :pOrder, :isHead, :isOpener, :watched
-            )");
-            $stmt->execute([
-                ':vName'    => $venueName,
-                ':vAddr'    => $venueAddress,
-                ':vCity'    => $venueCity,
-                ':vState'   => $venueState,
-                ':vType'    => $venueType,
-                ':eName'    => $eventName,
-                ':eStart'   => $startDate,
-                ':eEnd'     => $endDate,
-                ':pName'    => $pName,
-                ':pOrder'   => $order,
-                ':isHead'   => $isHead,
-                ':isOpener' => $isOpener,
-                ':watched'  => $isWatched,
-            ]);
-            $stmt->closeCursor();
-            $addedCount++;
-        }
-
-        if ($addedCount === 0) {
-            throw new Exception("Please add at least one performer.");
-        }
-
-        $message = "Event <strong>" . htmlspecialchars($eventName) . "</strong> saved with $addedCount performer(s).";
-        $msgType = 'success';
-
-    } catch (Exception $e) {
-        $message = $e->getMessage();
-        $msgType = 'error';
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -97,14 +23,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <title>Add Event – Croven Events</title>
   <link rel="stylesheet" href="styles.css">
   <style>
-    /* ── Page subheader ──────────────────────────────────────────── */
-    .page-subheader {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 0.25rem;
-    }
-
     /* ── Select inputs ───────────────────────────────────────────── */
     .field select {
       padding: 8px 10px;
@@ -126,7 +44,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     body.red .field select { color: #ff2b2b; }
 
-    /* ── Page heading ────────────────────────────────────────────── */
     .add-event-wrap {
       max-width: 620px;
       margin: 0 auto;
@@ -142,7 +59,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       margin-bottom: 0.25rem;
     }
 
-    /* ── Message banner ──────────────────────────────────────────── */
     .form-banner {
       padding: 12px 16px;
       border-radius: 10px;
@@ -163,7 +79,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     body.dark .form-banner.error { background: #2a1010; color: #ff6b6b; border-color: #ff6b6b; }
     body.red  .form-banner.error { background: #2a0000; color: #ff4d4d; border-color: #ff4d4d; }
 
-    /* ── Red theme: date input styling ──────────────────────────── */
     body.red input[type="date"] {
       color-scheme: dark;
       accent-color: #ff2b2b;
@@ -187,7 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       border-radius: 2px;
     }
 
-    /* ── Section cards ───────────────────────────────────────────── */
     .form-card {
       background: var(--card-bg);
       border: 0.5px solid var(--border);
@@ -207,7 +121,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       margin-bottom: -4px;
     }
 
-    /* ── Field grids ─────────────────────────────────────────────── */
     .field-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .field-full   { grid-column: 1 / -1; }
     @media (max-width: 520px) { .field-grid-2 { grid-template-columns: 1fr; } }
@@ -247,7 +160,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     body.red .field input::placeholder,
     body.red .p-row input::placeholder { color: rgba(255,43,43,0.45); }
 
-    /* ── Red theme: all text, labels, inputs → #ff2b2b ──────────── */
     body.red .field label,
     body.red .field label .req,
     body.red .form-card-title,
@@ -263,10 +175,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     body.red .btn-add-performer          { color: #ff2b2b; }
     body.red .btn-add-performer:hover    { color: #ff2b2b; border-color: #ff2b2b; }
-
     body.red .p-remove                   { color: #ff2b2b; border-color: #2a0000; }
 
-    /* ── Performers ──────────────────────────────────────────────── */
     #performers-list {
       display: flex;
       flex-direction: column;
@@ -303,7 +213,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     .p-row input:focus { border-color: var(--accent); }
 
-    /* toggle badges */
     .p-toggle {
       display: flex;
       flex-direction: column;
@@ -348,7 +257,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       border-color: var(--watched-text);
     }
 
-    /* remove button */
     .p-remove {
       background: none;
       border: 0.5px solid var(--border-strong);
@@ -368,7 +276,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     body.dark .p-remove:hover  { background: #2a1010; border-color: #ff6b6b; color: #ff6b6b; }
     body.red  .p-remove:hover  { background: #2a0000; border-color: #ff4d4d; color: #ff4d4d; }
 
-    /* column header row */
     .p-header {
       display: grid;
       grid-template-columns: 1fr 56px auto auto auto auto;
@@ -384,7 +291,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .p-header span:first-child { text-align: left; }
     @media (max-width: 480px) { .p-header { display: none; } }
 
-    /* add performer button */
     .btn-add-performer {
       width: 100%;
       padding: 9px;
@@ -407,7 +313,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       background: var(--input-bg);
     }
 
-    /* ── Submit button ────────────────────────────────────────────── */
     .btn-submit {
       width: 100%;
       padding: 12px;
@@ -421,10 +326,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       cursor: pointer;
       transition: opacity 0.15s;
     }
-    .btn-submit:hover  { opacity: 0.85; }
-    .btn-submit:active { opacity: 0.7; }
+    .btn-submit:hover    { opacity: 0.85; }
+    .btn-submit:active   { opacity: 0.7; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* ── Venue combobox dropdown ─────────────────────────────────── */
     .venue-dd {
       display: none;
       position: absolute;
@@ -461,7 +366,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     body.red .venue-dd li       { color: #ff2b2b; }
     body.red .venue-dd li .dd-sub { color: rgba(255,43,43,0.55); }
 
-    /* performer name wrap — fill the grid cell */
     .p-name-wrap { width: 100%; }
     .p-name-wrap .p-name-input {
       width: 100%;
@@ -499,174 +403,128 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <p style="font-size:13px;color:var(--muted)">New venues and performers are created automatically. Existing records are reused.</p>
   </div>
 
-  <?php if ($message): ?>
-    <div class="form-banner <?= $msgType ?>"><?= $message ?></div>
-  <?php endif; ?>
+  <div class="form-banner" id="formBanner" style="display:none"></div>
 
-  <form method="POST" action="">
-
-    <!-- ── 1. Event ──────────────────────────────────────────────── -->
-    <div class="form-card">
-      <div class="form-card-title">Event</div>
-      <div class="field-grid-2">
-        <div class="field field-full">
-          <label>Event Name <span class="req">*</span></label>
-          <input type="text" name="event_name"
-                 placeholder="e.g. Lollapalooza 2024"
-                 value="<?= htmlspecialchars($_POST['event_name'] ?? '') ?>" required>
-        </div>
-        <div class="field">
-          <label>Start Date <span class="req">*</span></label>
-          <input type="date" name="start_date"
-                 value="<?= htmlspecialchars($_POST['start_date'] ?? '') ?>" required>
-        </div>
-        <div class="field">
-          <label>End Date <span style="font-weight:400;opacity:.7">(blank = single day)</span></label>
-          <input type="date" name="end_date"
-                 value="<?= htmlspecialchars($_POST['end_date'] ?? '') ?>">
-        </div>
+  <!-- ── 1. Event ──────────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-title">Event</div>
+    <div class="field-grid-2">
+      <div class="field field-full">
+        <label>Event Name <span class="req">*</span></label>
+        <input type="text" id="eventName" placeholder="e.g. Lollapalooza 2024">
+      </div>
+      <div class="field">
+        <label>Start Date <span class="req">*</span></label>
+        <input type="date" id="startDate">
+      </div>
+      <div class="field">
+        <label>End Date <span style="font-weight:400;opacity:.7">(blank = single day)</span></label>
+        <input type="date" id="endDate">
       </div>
     </div>
+  </div>
 
-    <!-- ── 2. Venue ──────────────────────────────────────────────── -->
-    <div class="form-card">
-      <div class="form-card-title">Venue</div>
-      <div class="field-grid-2">
-
-        <!-- Venue Name combobox -->
-        <div class="field field-full" style="position:relative">
-          <label>Venue Name <span class="req">*</span></label>
-          <input type="text" id="venue_name_input" name="venue_name"
-                 placeholder="Search or enter a new venue..."
-                 value="<?= htmlspecialchars($_POST['venue_name'] ?? '') ?>"
-                 autocomplete="off" required>
-          <ul id="venue_dropdown" class="venue-dd" role="listbox"></ul>
-        </div>
-
-        <div class="field field-full">
-          <label>Address</label>
-          <input type="text" id="venue_address" name="venue_address"
-                 placeholder="e.g. 337 E Randolph St"
-                 value="<?= htmlspecialchars($_POST['venue_address'] ?? '') ?>">
-        </div>
-        <div class="field">
-          <label>City <span class="req">*</span></label>
-          <input type="text" id="venue_city" name="venue_city"
-                 placeholder="e.g. Chicago"
-                 value="<?= htmlspecialchars($_POST['venue_city'] ?? '') ?>" required>
-        </div>
-        <div class="field">
-          <label>State <span class="req">*</span></label>
-          <input type="text" id="venue_state" name="venue_state"
-                 placeholder="e.g. IL"
-                 value="<?= htmlspecialchars($_POST['venue_state'] ?? '') ?>" required>
-        </div>
-        <div class="field field-full">
-          <label>Venue Type</label>
-          <input type="text" id="venue_type" name="venue_type"
-                 placeholder="e.g. Outdoor Festival, Arena, Club"
-                 value="<?= htmlspecialchars($_POST['venue_type'] ?? '') ?>">
-        </div>
+  <!-- ── 2. Venue ──────────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-title">Venue</div>
+    <div class="field-grid-2">
+      <div class="field field-full" style="position:relative">
+        <label>Venue Name <span class="req">*</span></label>
+        <input type="text" id="venueName" placeholder="Search or enter a new venue..." autocomplete="off">
+        <ul id="venueDropdown" class="venue-dd" role="listbox"></ul>
+      </div>
+      <div class="field field-full">
+        <label>Address</label>
+        <input type="text" id="venueAddress" placeholder="e.g. 337 E Randolph St">
+      </div>
+      <div class="field">
+        <label>City <span class="req">*</span></label>
+        <input type="text" id="venueCity" placeholder="e.g. Chicago">
+      </div>
+      <div class="field">
+        <label>State <span class="req">*</span></label>
+        <input type="text" id="venueState" placeholder="e.g. IL">
+      </div>
+      <div class="field field-full">
+        <label>Venue Type</label>
+        <input type="text" id="venueType" placeholder="e.g. Outdoor Festival, Arena, Club">
       </div>
     </div>
+  </div>
 
-    <!-- Venue + Performer data for JS autofill -->
-    <script>
-    const VENUES     = <?= json_encode(array_values($venues),     JSON_HEX_TAG) ?>;
-    const PERFORMERS = <?= json_encode(array_values($performers), JSON_HEX_TAG) ?>;
-    </script>
-
-    <!-- ── 3. Performers ─────────────────────────────────────────── -->
-    <div class="form-card">
-      <div class="form-card-title">Performers</div>
-
-      <div class="p-header">
-        <span>Name</span>
-        <span>Order</span>
-        <span>Head</span>
-        <span>Open</span>
-        <span>Watched</span>
-        <span></span>
-      </div>
-
-      <div id="performers-list"></div>
-
-      <button type="button" class="btn-add-performer" onclick="addPerformer()">
-        + Add Performer
-      </button>
+  <!-- ── 3. Performers ─────────────────────────────────────────── -->
+  <div class="form-card">
+    <div class="form-card-title">Performers</div>
+    <div class="p-header">
+      <span>Name</span>
+      <span>Order</span>
+      <span>Head</span>
+      <span>Open</span>
+      <span>Watched</span>
+      <span></span>
     </div>
+    <div id="performersList"></div>
+    <button type="button" class="btn-add-performer" id="addPerformerBtn">+ Add Performer</button>
+  </div>
 
-    <button type="submit" class="btn-submit">Save Event</button>
+  <button type="button" class="btn-submit" id="submitBtn">Save Event</button>
 
-  </form>
 </div>
 
 <script>
-let count = 0;
+const VENUES     = <?= json_encode(array_values($venues),     JSON_HEX_TAG) ?>;
+const PERFORMERS = <?= json_encode(array_values($performers), JSON_HEX_TAG) ?>;
 
-function addPerformer(name='', order='', isHead=false, isOpener=false, isWatched=false) {
-  const i    = count++;
-  const list = document.getElementById('performers-list');
+let rowCount = 0;
+
+// ── Performer rows ────────────────────────────────────────────────────
+function addPerformerRow(opts = {}) {
+  const i    = rowCount++;
+  const list = document.getElementById('performersList');
   const row  = document.createElement('div');
   row.className = 'p-row';
-  row.id        = 'prow-' + i;
+  row.id = 'prow-' + i;
+  row.dataset.epId = opts.ep_id || '';
 
   row.innerHTML = `
     <div class="p-name-wrap" style="position:relative">
-      <input type="text" name="performer_name[]" class="p-name-input"
-             placeholder="Performer name" value="${esc(name)}"
-             autocomplete="off" required>
+      <input type="text" class="p-name-input" placeholder="Performer name"
+             value="${esc(opts.name || '')}" autocomplete="off">
       <ul class="venue-dd p-dd" role="listbox"></ul>
     </div>
-    <input type="number" name="performer_order[]" placeholder="#" min="1" value="${order || list.children.length + 1}">
-
+    <input type="number" class="p-order-input" placeholder="#" min="1"
+           value="${opts.order !== undefined ? opts.order : list.children.length + 1}">
     <label class="p-toggle is-headliner" title="Headliner">
-      <input type="checkbox" name="performer_headliner[]" value="${i}" ${isHead ? 'checked' : ''}>
+      <input type="checkbox" class="p-head-cb" ${opts.is_headliner ? 'checked' : ''}>
       <span class="p-toggle-label">Head</span>
       <span class="p-toggle-box">🎤</span>
     </label>
-
     <label class="p-toggle is-opener" title="Main Opener">
-      <input type="checkbox" name="performer_opener[]" value="${i}" ${isOpener ? 'checked' : ''}>
+      <input type="checkbox" class="p-opener-cb" ${opts.is_opener ? 'checked' : ''}>
       <span class="p-toggle-label">Open</span>
       <span class="p-toggle-box">🎸</span>
     </label>
-
     <label class="p-toggle is-watched" title="I watched this">
-      <input type="checkbox" name="performer_watched[]" value="${i}" ${isWatched ? 'checked' : ''}>
+      <input type="checkbox" class="p-watched-cb" ${opts.watched ? 'checked' : ''}>
       <span class="p-toggle-label">Watched</span>
       <span class="p-toggle-box">👁️</span>
     </label>
-
-    <button type="button" class="p-remove" onclick="removeRow('prow-${i}')" title="Remove">×</button>
+    <button type="button" class="p-remove" title="Remove">×</button>
   `;
 
+  row.querySelector('.p-remove').addEventListener('click', () => row.remove());
+  attachPerformerCombobox(row.querySelector('.p-name-input'), row.querySelector('.p-dd'));
   list.appendChild(row);
-
-  // Attach performer combobox to this new row
-  const nameInput = row.querySelector('.p-name-input');
-  const nameDd    = row.querySelector('.p-dd');
-  attachPerformerCombobox(nameInput, nameDd);
 }
 
-function removeRow(id) {
-  const el = document.getElementById(id);
-  if (el) el.remove();
-}
+document.getElementById('addPerformerBtn').addEventListener('click', () => addPerformerRow());
+addPerformerRow(); // start with one empty row
 
-function esc(s) {
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-addPerformer(); // start with one empty row
-
-// ── Performer combobox (attached per-row) ────────────────────────
+// ── Performer combobox ────────────────────────────────────────────────
 function attachPerformerCombobox(input, dd) {
   function renderList(q) {
     dd.innerHTML = '';
-    const lower = q.toLowerCase().trim();
+    const lower   = q.toLowerCase().trim();
     const matches = lower
       ? PERFORMERS.filter(p => p.performer_Name.toLowerCase().includes(lower))
       : PERFORMERS;
@@ -688,7 +546,6 @@ function attachPerformerCombobox(input, dd) {
       li.textContent = `+ Add new: "${q}"`;
       dd.appendChild(li);
     }
-
     dd.classList.toggle('open', dd.children.length > 0);
   }
 
@@ -697,22 +554,22 @@ function attachPerformerCombobox(input, dd) {
   input.addEventListener('blur',  () => setTimeout(() => dd.classList.remove('open'), 150));
 }
 
-// ── Venue combobox ────────────────────────────────────────────────
+// ── Venue combobox ────────────────────────────────────────────────────
 (function () {
-  const input = document.getElementById('venue_name_input');
-  const dd    = document.getElementById('venue_dropdown');
+  const input = document.getElementById('venueName');
+  const dd    = document.getElementById('venueDropdown');
 
   function fill(v) {
-    input.value                               = v.venue_Name    || '';
-    document.getElementById('venue_address').value = v.venue_Address || '';
-    document.getElementById('venue_city').value    = v.venue_City    || '';
-    document.getElementById('venue_state').value   = v.venue_State   || '';
-    document.getElementById('venue_type').value    = v.venue_Type    || '';
+    input.value = v.venue_Name || '';
+    document.getElementById('venueAddress').value = v.venue_Address || '';
+    document.getElementById('venueCity').value    = v.venue_City    || '';
+    document.getElementById('venueState').value   = v.venue_State   || '';
+    document.getElementById('venueType').value    = v.venue_Type    || '';
   }
 
   function renderList(q) {
     dd.innerHTML = '';
-    const lower = q.toLowerCase().trim();
+    const lower   = q.toLowerCase().trim();
     const matches = lower
       ? VENUES.filter(v => v.venue_Name.toLowerCase().includes(lower))
       : VENUES;
@@ -735,7 +592,6 @@ function attachPerformerCombobox(input, dd) {
       li.textContent = `+ Add new venue: "${q}"`;
       dd.appendChild(li);
     }
-
     dd.classList.toggle('open', dd.children.length > 0);
   }
 
@@ -744,6 +600,101 @@ function attachPerformerCombobox(input, dd) {
   input.addEventListener('blur',  () => setTimeout(() => dd.classList.remove('open'), 150));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') dd.classList.remove('open'); });
 })();
+
+// ── Submit ────────────────────────────────────────────────────────────
+document.getElementById('submitBtn').addEventListener('click', async () => {
+  const eventName = document.getElementById('eventName').value.trim();
+  const startDate = document.getElementById('startDate').value;
+  const endDate   = document.getElementById('endDate').value;
+  const venueName = document.getElementById('venueName').value.trim();
+  const venueCity = document.getElementById('venueCity').value.trim();
+  const venueState= document.getElementById('venueState').value.trim();
+
+  if (!eventName || !startDate || !venueName || !venueCity || !venueState) {
+    showBanner('Please fill in all required fields.', 'error');
+    return;
+  }
+
+  // Collect performers
+  const performers = [];
+  document.querySelectorAll('#performersList .p-row').forEach((row, idx) => {
+    const name = row.querySelector('.p-name-input').value.trim();
+    if (!name) return;
+    performers.push({
+      name,
+      order:        parseInt(row.querySelector('.p-order-input').value) || (idx + 1),
+      is_headliner: row.querySelector('.p-head-cb').checked   ? 1 : 0,
+      is_opener:    row.querySelector('.p-opener-cb').checked  ? 1 : 0,
+      watched:      row.querySelector('.p-watched-cb').checked ? 1 : 0,
+    });
+  });
+
+  if (performers.length === 0) {
+    showBanner('Please add at least one performer.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const res  = await fetch('event_api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action:        'insert',
+        event_name:    eventName,
+        start_date:    startDate,
+        end_date:      endDate,
+        venue_name:    venueName,
+        venue_address: document.getElementById('venueAddress').value.trim(),
+        venue_city:    venueCity,
+        venue_state:   venueState,
+        venue_type:    document.getElementById('venueType').value.trim(),
+        performers,
+      })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      showBanner(`Event <strong>${esc(eventName)}</strong> saved with ${performers.length} performer(s).`, 'success');
+      // Reset form
+      document.getElementById('eventName').value   = '';
+      document.getElementById('startDate').value   = '';
+      document.getElementById('endDate').value     = '';
+      document.getElementById('venueName').value   = '';
+      document.getElementById('venueAddress').value= '';
+      document.getElementById('venueCity').value   = '';
+      document.getElementById('venueState').value  = '';
+      document.getElementById('venueType').value   = '';
+      document.getElementById('performersList').innerHTML = '';
+      rowCount = 0;
+      addPerformerRow();
+    } else {
+      showBanner(data.error || 'Failed to save.', 'error');
+    }
+  } catch (err) {
+    showBanner('Network error. Please try again.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Event';
+  }
+});
+
+function showBanner(msg, type) {
+  const el = document.getElementById('formBanner');
+  el.innerHTML  = msg;
+  el.className  = 'form-banner ' + type;
+  el.style.display = 'block';
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 </script>
 
 </body>
