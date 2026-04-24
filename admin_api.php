@@ -1,6 +1,7 @@
 <?php
 // ─── admin_api.php — Admin CRUD API ──────────────────────────────────
 require_once 'db.php';
+require_once 'auth.php';
 
 header('Content-Type: application/json');
 

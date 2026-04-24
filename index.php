@@ -1,5 +1,6 @@
 <?php
 require_once 'db.php';
+require_once 'auth.php';
 
 // ─── Quick stats for the home page ──────────────────────────────────
 $totalEvents     = $pdo->query("SELECT COUNT(DISTINCT event_ID) FROM vw_full_event")->fetchColumn();

@@ -1,5 +1,6 @@
 <?php
 require_once 'db.php';
+require_once 'auth.php';
 
 // ─── Fetch all favorites with user name ──────────────────────────────
 $selectedUser = $_GET['nav_user'] ?? ($_SESSION['nav_user'] ?? '');

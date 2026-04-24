@@ -1,5 +1,6 @@
 <?php
 require_once 'db.php';
+require_once 'auth.php';
 
 // ─── Fetch all user tables (exclude views and system tables) ──────────
 $tablesStmt = $pdo->query("

@@ -44,18 +44,17 @@ try {
 $navItems = [
     'home'     => ['label' => 'Home',     'href' => 'index.php',    'icon' => '🏠'],
     'schedule' => ['label' => 'Schedule', 'href' => 'schedule.php', 'icon' => '📅'],
-    'stats' => ['label' => 'Stats', 'href' => 'stats.php', 'icon' => '📜'],
-    'new'       => ['label' => 'Add Event', 'href' => 'add_event.php',  'icon' => '➕'],
-    'favorites' => ['label' => 'Favorites', 'href' => 'favorites.php', 'icon' => '⭐'],
-    'admin'     => ['label' => 'Admin',     'href' => 'admin.php',     'icon' => '🛠️'],
-    // Add more pages here, e.g.:
-    // 'artists' => ['label' => 'Artists', 'href' => 'artists.php', 'icon' => '🎤'],
-    // 'venues'  => ['label' => 'Venues',  'href' => 'venues.php',  'icon' => '📍'],
-    // 'stats'   => ['label' => 'Stats',   'href' => 'stats.php',   'icon' => '📊'],
+    'stats'    => ['label' => 'Stats',    'href' => 'stats.php',    'icon' => '📜'],
+    'new'      => ['label' => 'Add Event','href' => 'add_event.php','icon' => '➕'],
+    'favorites'=> ['label' => 'Favorites','href' => 'favorites.php','icon' => '⭐'],
+    'admin'    => ['label' => 'Admin',    'href' => 'admin.php',    'icon' => '🛠️'],
 ];
 
 $currentPage = $currentPage ?? '';
 $pageTitle   = $pageTitle   ?? 'Croven Events';
+
+// ─── Auth info (set by auth.php if included) ─────────────────────────
+$authUserName = $authUserName ?? ($_SESSION['auth_user_name'] ?? '');
 ?>
 
 <!-- ══ Top nav bar ══════════════════════════════════ -->
@@ -69,7 +68,9 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
 
   <span class="site-title"><?= htmlspecialchars($pageTitle) ?></span>
 
-  <button id="themeToggle" class="theme-toggle-btn" aria-label="Toggle theme">🌙</button>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button id="themeToggle" class="theme-toggle-btn" aria-label="Toggle theme">🌙</button>
+  </div>
 
 </header>
 
@@ -82,9 +83,18 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
     <button class="nav-close-btn" id="navCloseBtn" aria-label="Close menu">&#10005;</button>
   </div>
 
+  <!-- ── Logged-in user badge ── -->
+  <?php if ($authUserName !== ''): ?>
+  <div class="nav-auth-badge">
+    <span class="nav-auth-icon">👤</span>
+    <span class="nav-auth-name"><?= htmlspecialchars($authUserName) ?></span>
+    <a href="logout.php" class="nav-logout-btn" title="Sign out">Sign out</a>
+  </div>
+  <?php endif; ?>
+
   <!-- ── User dropdown ── -->
   <div class="nav-user-section">
-    <label class="nav-user-label" for="navUserSelect">User</label>
+    <label class="nav-user-label" for="navUserSelect">Viewing as</label>
     <div class="nav-user-select-wrap">
       <select class="nav-user-select" id="navUserSelect">
         <option value="">All</option>
@@ -206,6 +216,39 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
   opacity: 0.4;
 }
 
+/* ── Auth badge ──────────────────────────────────────────────────────── */
+.nav-auth-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.nav-auth-icon { font-size: 14px; opacity: 0.6; }
+.nav-auth-name {
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 600;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-logout-btn {
+  font-size: 0.75rem;
+  color: inherit;
+  opacity: 0.45;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  padding: 3px 9px;
+  white-space: nowrap;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.nav-logout-btn:hover { opacity: 1; background: rgba(255,255,255,0.08); }
+
 /* ── User dropdown ───────────────────────────────────────────────────── */
 .nav-user-section {
   padding: 12px 14px 10px;
@@ -284,14 +327,12 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
 .nav-item-label        { flex: 1; }
 .nav-item-dot          { width: 6px; height: 6px; border-radius: 50%; background: var(--accent, #e74c3c); flex-shrink: 0; }
 
-/* ── Favorites — direct children of Schedule ─────────────────────────── */
-
+/* ── Favorites ───────────────────────────────────────────────────────── */
 .nav-fav-list {
   list-style: none;
   margin: 0;
   padding: 0 0 4px 20px;
 }
-
 .nav-fav-item {
   display: flex;
   align-items: center;
@@ -357,7 +398,6 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
       if (userSelect.value) {
         url.searchParams.set('nav_user', userSelect.value);
       } else {
-        // Explicitly pass empty nav_user so the PHP session is cleared
         url.searchParams.set('nav_user', '');
       }
       window.location.href = url.toString();
@@ -390,7 +430,6 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
     pill.addEventListener('click', () => applyTheme(pill.dataset.theme));
   });
 
-  // On load
   applyTheme(localStorage.getItem('theme') || 'dark');
 })();
 </script>

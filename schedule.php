@@ -1,5 +1,6 @@
 <?php
 require_once 'db.php';
+require_once 'auth.php';
 
 // ─── Query users for Favorites dropdown ─────────────────────────────
 $usersStmt = $pdo->query("SELECT id, name FROM users ORDER BY name ASC");
