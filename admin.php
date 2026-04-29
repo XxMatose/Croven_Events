@@ -1,5 +1,5 @@
 <?php
-require_once 'db.php';
+require_once 'db/db_hosted.php';
 require_once 'auth.php';
 
 // ─── Fetch all user tables (exclude views and system tables) ──────────

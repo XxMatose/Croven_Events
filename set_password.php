@@ -7,7 +7,7 @@
 // your server, or run via CLI:
 //   php set_password.php
 // ─────────────────────────────────────────────────────────────────────
-require_once 'db_hosted.php';
+require_once 'db/db_hosted.php';
 require_once 'auth.php';
 
 // ── CLI usage ─────────────────────────────────────────────────────────
