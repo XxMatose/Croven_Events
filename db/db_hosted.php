@@ -8,7 +8,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-$credentials_file = dirname(dirname(dirname(dirname(__DIR__)))) . 'db_credentials.php';
+$credentials_file = dirname(dirname(dirname(dirname(__DIR__)))) . '/db_credentials.php';
 
 // ── TEMPORARY DEBUG ──
 echo "Path PHP is checking: " . $credentials_file;
