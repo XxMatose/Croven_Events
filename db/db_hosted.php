@@ -10,11 +10,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 $credentials_file = dirname(dirname(dirname(dirname(__DIR__)))) . '/db_credentials.php';
 
-// ── TEMPORARY DEBUG ──
-echo "Path PHP is checking: " . $credentials_file;
-die();
-// ────────────────────
-
 if (!file_exists($credentials_file)) {
     die("Configuration error: credentials file not found at expected path.");
 }
