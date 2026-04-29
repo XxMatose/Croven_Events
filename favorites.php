@@ -8,14 +8,21 @@ try {
         SELECT f.id, f.label, f.path, u.name AS user_name, u.id AS user_id
         FROM favorites f
         JOIN users u ON u.id = f.user_id
-        WHERE u.name = ?
-        ORDER BY f.label ASC
+        ORDER BY u.name ASC, f.label ASC
     ");
-    $stmt->execute([$authUserName]);
+    $stmt->execute([]);
     $favList = $stmt->fetchAll();
 } catch (Exception $e) {
     $favList = [];
 }
+
+// ─── Build sorted unique user list for filter pills ───────────────────
+$favUsers = [];
+foreach ($favList as $fav) {
+    $favUsers[$fav['user_name']] = true;
+}
+ksort($favUsers);
+$favUsers = array_keys($favUsers);
 
 // ─── Edit modal only needs the logged-in user (no dropdown needed) ────
 $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
@@ -140,6 +147,21 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
     .fav-confirm-text { font-size: 0.9rem; font-weight: 600; color: #e05555; text-align: center; }
     .fav-confirm-text span { display: block; font-size: 0.78rem; font-weight: 400; opacity: 0.7; margin-top: 4px; }
     .fav-confirm-btns { display: flex; gap: 10px; justify-content: center; }
+
+    /* Filter pills */
+    .fav-pills {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;
+    }
+    .fav-pill {
+      padding: 6px 16px; border-radius: 999px; font-size: 0.8rem; font-weight: 600;
+      border: 1px solid var(--border-strong); background: var(--input-bg);
+      color: inherit; cursor: pointer; transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+      opacity: 0.65;
+    }
+    .fav-pill:hover { opacity: 1; }
+    .fav-pill.active {
+      background: var(--accent); border-color: var(--accent); color: #fff; opacity: 1;
+    }
     .fav-btn-confirm-yes {
       padding: 9px 24px; border-radius: 10px; border: none;
       background: #e05555; color: #fff; font-size: 0.88rem; font-weight: 600;
@@ -170,6 +192,17 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
     </div>
   </div>
 
+  <?php if (count($favUsers) > 1): ?>
+  <div class="fav-pills" id="favPills">
+    <button class="fav-pill active" data-filter="all">All</button>
+    <?php foreach ($favUsers as $uname): ?>
+    <button class="fav-pill" data-filter="<?= htmlspecialchars($uname, ENT_QUOTES) ?>">
+      <?= htmlspecialchars($uname) ?>
+    </button>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+
   <?php if (empty($favList)): ?>
     <div class="fav-empty">
       <div class="fav-empty-icon">⭐</div>
@@ -178,7 +211,7 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
   <?php else: ?>
   <div class="fav-grid" id="favGrid">
     <?php foreach ($favList as $fav): ?>
-    <div class="fav-card" data-id="<?= $fav['id'] ?>">
+    <div class="fav-card" data-id="<?= $fav['id'] ?>" data-user="<?= htmlspecialchars($fav['user_name'], ENT_QUOTES) ?>">
       <div class="fav-card-top">
         <div class="fav-card-title"><?= htmlspecialchars($fav['label']) ?></div>
         <button class="fav-edit-btn"
@@ -244,6 +277,7 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
 let editingId = null;
 const AUTH_USER_ID = <?= $authUserId ?>;
 
+// ─── Modal ────────────────────────────────────────────────────────────
 function openEditModal(btn) {
   editingId = parseInt(btn.dataset.id, 10);
   document.getElementById('editLabel').value = btn.dataset.label;
@@ -259,6 +293,12 @@ function closeModal() {
   editingId = null;
 }
 
+function setStatus(msg, type) {
+  const el = document.getElementById('favStatus');
+  el.textContent = msg;
+  el.className = 'fav-status' + (type ? ' ' + type : '');
+}
+
 document.getElementById('favModalClose').addEventListener('click', closeModal);
 document.getElementById('favBtnCancel').addEventListener('click', closeModal);
 document.getElementById('favModalOverlay').addEventListener('click', e => {
@@ -266,15 +306,10 @@ document.getElementById('favModalOverlay').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-function setStatus(msg, type) {
-  const el = document.getElementById('favStatus');
-  el.textContent = msg;
-  el.className = 'fav-status' + (type ? ' ' + type : '');
-}
-
+// ─── Save ─────────────────────────────────────────────────────────────
 document.getElementById('favBtnSave').addEventListener('click', async () => {
-  const label  = document.getElementById('editLabel').value.trim();
-  const path   = document.getElementById('editPath').value.trim();
+  const label = document.getElementById('editLabel').value.trim();
+  const path  = document.getElementById('editPath').value.trim();
   if (!label || !path) { setStatus('All fields are required.', 'error'); return; }
   try {
     const res  = await fetch('api/edit_favorite.php', {
@@ -300,6 +335,7 @@ document.getElementById('favBtnSave').addEventListener('click', async () => {
   } catch (err) { setStatus('Network error.', 'error'); }
 });
 
+// ─── Delete ───────────────────────────────────────────────────────────
 document.getElementById('favBtnDelete').addEventListener('click', () => {
   document.getElementById('favConfirmPanel').classList.add('open');
 });
@@ -336,6 +372,27 @@ document.getElementById('favConfirmYes').addEventListener('click', async () => {
     setStatus('Network error.', 'error');
   }
 });
+
+// ─── Filter pills ─────────────────────────────────────────────────────
+const pillsContainer = document.getElementById('favPills');
+if (pillsContainer) {
+  pillsContainer.addEventListener('click', e => {
+    const pill = e.target.closest('.fav-pill');
+    if (!pill) return;
+    pillsContainer.querySelectorAll('.fav-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    const filter = pill.dataset.filter;
+    const cards = document.querySelectorAll('.fav-card');
+    let visible = 0;
+    cards.forEach(card => {
+      const show = filter === 'all' || card.dataset.user === filter;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    const countEl = document.getElementById('favCount');
+    if (countEl) countEl.textContent = `${visible} favorite${visible !== 1 ? 's' : ''}`;
+  });
+}
 </script>
 
 </body>
