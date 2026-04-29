@@ -11,7 +11,7 @@ $selectedUser = $authUserName;
 $favorites = [];
 try {
     if ($selectedUser !== '') {
-        $favStmt = $pdo->prepare("SELECT label, path FROM vw_favorites WHERE user = ? ORDER BY label");
+        $favStmt = $pdo->prepare("SELECT label, path FROM vw_favorites WHERE user = ? ORDER BY label LIMIT 5");
         $favStmt->execute([$selectedUser]);
     } else {
         $favStmt = $pdo->query("SELECT label, path FROM vw_favorites ORDER BY label");
@@ -69,7 +69,7 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
           <?php if ($currentPage === $key): ?><span class="nav-item-dot"></span><?php endif; ?>
         </a>
 
-        <?php if ($key === 'schedule' && !empty($favorites)): ?>
+        <?php if ($key === 'favorites' && !empty($favorites)): ?>
         <ul class="nav-fav-list">
           <?php foreach ($favorites as $fav): ?>
             <li>
