@@ -652,6 +652,12 @@ GRID / CARDS
   gap: 6px;
 }
 
+.venue-location {
+  font-size: 12px;
+  color: var(--muted);
+  padding-left: 20px;
+}
+
 .venue-icon {
   width: 14px;
   height: 14px;
@@ -729,6 +735,16 @@ CALENDAR MODAL
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
 }
 
+/* ── Hint bar ─────────────────────────────────────── */
+
+.cal-hint {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 10px;
+  min-height: 18px;
+}
+
 .cal-header {
   display: flex;
   align-items: center;
@@ -791,12 +807,9 @@ CALENDAR MODAL
 
 .cal-day.has-event {
   font-weight: 500;
-  color: var(--accent);
-}
-
-.cal-day.selected {
-  background: var(--accent);
-  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
 }
 
 .cal-day.today {
@@ -828,6 +841,26 @@ CALENDAR MODAL
   color: #fff;
   border-color: var(--accent);
 }
+
+/* ── Calendar range selection ─────────────────────── */
+
+.cal-day.in-range {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-radius: 0;
+}
+
+.cal-day.range-start,
+.cal-day.range-end {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 0;
+}
+
+.cal-day.range-start { border-radius: 6px 0 0 6px; }
+.cal-day.range-end   { border-radius: 0 6px 6px 0; }
+
+/* Single-day selection gets full rounding */
+.cal-day.range-start.range-end { border-radius: 6px; }
 
 /* ══════════════════════════════════════════
 MISC
@@ -910,18 +943,3 @@ ANIMATIONS
 .performer-row.headliner {
   font-weight: 600;
 }
-
-/* ── Calendar range selection ─────────────────────────────────── */
-.cal-day.in-range {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  border-radius: 0;
-}
-.cal-day.range-start,
-.cal-day.range-end {
-  background: var(--accent);
-  color: #fff;
-  border-radius: 0;
-}
-.cal-day.range-start { border-radius: 6px 0 0 6px; }
-.cal-day.range-end   { border-radius: 0 6px 6px 0; }
-.cal-day.range-start.range-end { border-radius: 6px; } /* single day */
