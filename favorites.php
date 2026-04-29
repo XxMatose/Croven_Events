@@ -26,7 +26,7 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Favorites – Croven Events</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="css/styles.css">
   <style>
     .fav-wrap {
       max-width: 1100px;

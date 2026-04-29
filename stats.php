@@ -133,7 +133,7 @@ $yearsJson     = json_encode($allYears,                     JSON_HEX_TAG | JSON_
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stats – Croven Events</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="css/styles.css">
   <style>
     /* ── Page layout ─────────────────────────────────────────────── */
     .stats-wrap {

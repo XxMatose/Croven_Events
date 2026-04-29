@@ -73,7 +73,7 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Schedule – Croven Events</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
