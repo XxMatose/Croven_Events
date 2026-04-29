@@ -24,8 +24,13 @@ foreach ($favList as $fav) {
 ksort($favUsers);
 $favUsers = array_keys($favUsers);
 
-// ─── Edit modal only needs the logged-in user (no dropdown needed) ────
+// ─── Fetch all users for the reassign dropdown ───────────────────────
 $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
+try {
+    $allUsers = $pdo->query("SELECT id, name FROM users ORDER BY name ASC")->fetchAll();
+} catch (Exception $e) {
+    $allUsers = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -76,6 +81,9 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
       word-break: break-all; text-decoration: none; line-height: 1.4; transition: opacity 0.15s;
     }
     .fav-card-link:hover { opacity: 1; text-decoration: underline; }
+    .fav-card-owner {
+      font-size: 0.73rem; opacity: 0.45; letter-spacing: 0.02em;
+    }
     .fav-empty { text-align: center; padding: 60px 20px; opacity: 0.4; font-size: 0.95rem; }
     .fav-empty-icon { font-size: 2.5rem; margin-bottom: 10px; }
 
@@ -113,6 +121,12 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
       outline: none; transition: border-color 0.15s; width: 100%;
     }
     .fav-field input:focus { border-color: var(--accent); }
+    .fav-field select {
+      background: var(--input-bg); border: 1px solid var(--border-strong);
+      border-radius: 10px; padding: 10px 14px; font-size: 0.9rem; color: inherit;
+      outline: none; transition: border-color 0.15s; width: 100%; cursor: pointer;
+    }
+    .fav-field select:focus { border-color: var(--accent); }
     .fav-modal-footer {
       padding: 14px 20px; border-top: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -218,6 +232,8 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
           data-id="<?= $fav['id'] ?>"
           data-label="<?= htmlspecialchars($fav['label'], ENT_QUOTES) ?>"
           data-path="<?= htmlspecialchars($fav['path'], ENT_QUOTES) ?>"
+          data-user-id="<?= $fav['user_id'] ?>"
+          data-user-name="<?= htmlspecialchars($fav['user_name'], ENT_QUOTES) ?>"
           onclick="openEditModal(this)">
           Edit
         </button>
@@ -225,6 +241,7 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
       <a class="fav-card-link" href="<?= htmlspecialchars($fav['path']) ?>" target="_blank">
         <?= htmlspecialchars($fav['path']) ?>
       </a>
+      <div class="fav-card-owner">&#128100; <?= htmlspecialchars($fav['user_name']) ?></div>
     </div>
     <?php endforeach; ?>
   </div>
@@ -250,6 +267,14 @@ $authUserId = (int)($_SESSION['auth_user_id'] ?? 0);
       <div class="fav-field">
         <label for="editPath">Link / URL</label>
         <input type="text" id="editPath" maxlength="250" placeholder="e.g. schedule.php?category=city&q=chicago">
+      </div>
+      <div class="fav-field">
+        <label for="editUser">User</label>
+        <select id="editUser">
+          <?php foreach ($allUsers as $u): ?>
+          <option value="<?= $u['id'] ?>"><?= htmlspecialchars($u['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
       </div>
     </div>
 
@@ -282,6 +307,7 @@ function openEditModal(btn) {
   editingId = parseInt(btn.dataset.id, 10);
   document.getElementById('editLabel').value = btn.dataset.label;
   document.getElementById('editPath').value  = btn.dataset.path;
+  document.getElementById('editUser').value  = btn.dataset.userId;
   setStatus('', '');
   document.getElementById('favConfirmPanel').classList.remove('open');
   document.getElementById('favModalOverlay').classList.add('open');
@@ -315,24 +341,46 @@ document.getElementById('favBtnSave').addEventListener('click', async () => {
     const res  = await fetch('api/edit_favorite.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: editingId, label, path, user_id: AUTH_USER_ID })
+      body: JSON.stringify({ id: editingId, label, path, user_id: parseInt(document.getElementById('editUser').value, 10) })
     });
-    const data = await res.json();
+    const raw  = await res.text();
+    let data;
+    try { data = JSON.parse(raw); } catch(e) { setStatus('Server error: ' + raw.substring(0, 200), 'error'); return; }
     if (data.success) {
       setStatus('Saved!', 'success');
       const card = document.querySelector(`.fav-card[data-id="${editingId}"]`);
       if (card) {
+        const newUserId   = document.getElementById('editUser').value;
+        const newUserName = document.getElementById('editUser').options[document.getElementById('editUser').selectedIndex].text;
         card.querySelector('.fav-card-title').textContent = label;
         const linkEl = card.querySelector('.fav-card-link');
         linkEl.textContent = path; linkEl.href = path;
-        card.querySelector('.fav-edit-btn').dataset.label = label;
-        card.querySelector('.fav-edit-btn').dataset.path  = path;
+        const editBtn = card.querySelector('.fav-edit-btn');
+        editBtn.dataset.label    = label;
+        editBtn.dataset.path     = path;
+        editBtn.dataset.userId   = newUserId;
+        editBtn.dataset.userName = newUserName;
+        card.dataset.user = newUserName;
+        const ownerEl = card.querySelector('.fav-card-owner');
+        if (ownerEl) ownerEl.textContent = '👤 ' + newUserName;
+      }
+      const activePill = document.querySelector('.fav-pill.active');
+      if (activePill && activePill.dataset.filter !== 'all') {
+        const filter = activePill.dataset.filter;
+        let visible = 0;
+        document.querySelectorAll('.fav-card').forEach(c => {
+          const show = c.dataset.user === filter;
+          c.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+        const countEl = document.getElementById('favCount');
+        if (countEl) countEl.textContent = `${visible} favorite${visible !== 1 ? 's' : ''}`;
       }
       setTimeout(closeModal, 900);
     } else {
       setStatus(data.error || 'Save failed.', 'error');
     }
-  } catch (err) { setStatus('Network error.', 'error'); }
+  } catch (err) { setStatus('Network error: ' + err.message, 'error'); }
 });
 
 // ─── Delete ───────────────────────────────────────────────────────────
