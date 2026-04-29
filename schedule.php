@@ -1,6 +1,6 @@
 <?php
 require_once 'db/db_hosted.php';
-require_once 'auth.php';
+require_once 'api/auth.php';
 
 // ─── Query users for Favorites dropdown ─────────────────────────────
 $usersStmt = $pdo->query("SELECT id, name FROM users ORDER BY name ASC");
@@ -1104,7 +1104,7 @@ favForm.addEventListener('submit', async (e) => {
   const submitBtn = favForm.querySelector('.fav-submit');
   submitBtn.disabled = true; submitBtn.textContent = 'Saving…';
   try {
-    const res  = await fetch('save_favorite.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, path, user_id: parseInt(userId) }) });
+    const res  = await fetch('api/save_favorite.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, path, user_id: parseInt(userId) }) });
     const data = await res.json();
     if (data.success) { favFeedback.textContent = '★ Favorite saved!'; favFeedback.className = 'fav-feedback success'; setTimeout(closeFavModal, 1200); }
     else { favFeedback.textContent = data.error || 'Failed to save.'; favFeedback.className = 'fav-feedback error'; }
@@ -1342,7 +1342,7 @@ document.getElementById('emBtnSave').addEventListener('click', async () => {
   saveBtn.textContent = 'Saving…';
 
   try {
-    const res  = await fetch('event_api.php', {
+    const res  = await fetch('api/event_api.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

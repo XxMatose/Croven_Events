@@ -1,7 +1,7 @@
 <?php
 // ─── auth.php — Session gate ──────────────────────────────────────────
 // Include this on every protected page AFTER require_once 'db.php':
-//   require_once 'auth.php';
+//   require_once 'api/auth.php';
 //
 // It checks for a valid session and redirects to login.php if not found.
 // ─────────────────────────────────────────────────────────────────────

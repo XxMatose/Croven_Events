@@ -1,6 +1,6 @@
 <?php
 require_once 'db/db_hosted.php';
-require_once 'auth.php';
+require_once 'api/auth.php';
 
 // ─── Fetch all venues for the dropdown ──────────────────────────────
 $venues = [];
@@ -640,7 +640,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   btn.textContent = 'Saving…';
 
   try {
-    const res  = await fetch('event_api.php', {
+    const res  = await fetch('api/event_api.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

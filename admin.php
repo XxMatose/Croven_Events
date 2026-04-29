@@ -1,6 +1,6 @@
 <?php
 require_once 'db/db_hosted.php';
-require_once 'auth.php';
+require_once 'api/auth.php';
 
 // ─── Fetch all user tables (exclude views and system tables) ──────────
 $tablesStmt = $pdo->query("
@@ -679,7 +679,7 @@ async function saveRow(btn) {
   btn.disabled = true;
 
   try {
-    const res  = await fetch('admin_api.php', {
+    const res  = await fetch('api/admin_api.php', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ action: 'update', ...payload })
@@ -720,7 +720,7 @@ async function executeDelete() {
   closeConfirmDelete();
 
   try {
-    const res  = await fetch('admin_api.php', {
+    const res  = await fetch('api/admin_api.php', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ action: 'delete', table: SELECTED_TABLE, pk: PRIMARY_KEY, pk_val: pkVal })
@@ -779,7 +779,7 @@ async function insertRow() {
   inputs.forEach(inp => { rowData[inp.dataset.col] = inp.value; });
 
   try {
-    const res  = await fetch('admin_api.php', {
+    const res  = await fetch('api/admin_api.php', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ action: 'insert', table: SELECTED_TABLE, data: rowData })

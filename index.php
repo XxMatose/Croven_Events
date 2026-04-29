@@ -1,6 +1,6 @@
 <?php
 require_once 'db/db_hosted.php';
-require_once 'auth.php';
+require_once 'api/auth.php';
 
 // ─── Quick stats ─────────────────────────────────────────────────────
 $totalEvents     = $pdo->query("SELECT COUNT(DISTINCT event_ID) FROM vw_full_event")->fetchColumn();

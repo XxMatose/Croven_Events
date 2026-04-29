@@ -1,6 +1,6 @@
 <?php
 require_once 'db/db_hosted.php';
-require_once 'auth.php';
+require_once 'api/auth.php';
 
 // ─── Favorites are always for the logged-in user ─────────────────────
 try {
@@ -277,7 +277,7 @@ document.getElementById('favBtnSave').addEventListener('click', async () => {
   const path   = document.getElementById('editPath').value.trim();
   if (!label || !path) { setStatus('All fields are required.', 'error'); return; }
   try {
-    const res  = await fetch('edit_favorite.php', {
+    const res  = await fetch('api/edit_favorite.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: editingId, label, path, user_id: AUTH_USER_ID })
@@ -308,7 +308,7 @@ document.getElementById('favConfirmNo').addEventListener('click', () => {
 });
 document.getElementById('favConfirmYes').addEventListener('click', async () => {
   try {
-    const res  = await fetch('edit_favorite.php', {
+    const res  = await fetch('api/edit_favorite.php', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: editingId })

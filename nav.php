@@ -54,7 +54,7 @@ $pageTitle   = $pageTitle   ?? 'Croven Events';
   <div class="nav-auth-badge">
     <span class="nav-auth-avatar"><?= htmlspecialchars(mb_strtoupper(mb_substr($authUserName, 0, 1))) ?></span>
     <span class="nav-auth-name"><?= htmlspecialchars($authUserName) ?></span>
-    <a href="logout.php" class="nav-logout-btn">Sign out</a>
+    <a href="api/logout.php" class="nav-logout-btn">Sign out</a>
   </div>
   <?php endif; ?>
 

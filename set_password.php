@@ -8,7 +8,7 @@
 //   php set_password.php
 // ─────────────────────────────────────────────────────────────────────
 require_once 'db/db_hosted.php';
-require_once 'auth.php';
+require_once 'api/auth.php';
 
 // ── CLI usage ─────────────────────────────────────────────────────────
 if (php_sapi_name() === 'cli') {

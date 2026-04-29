@@ -1,6 +1,6 @@
 <?php
 require_once 'db/db_hosted.php';
-require_once 'auth.php';
+require_once 'api/auth.php';
 
 // ─── Fetch all raw data ──────────────────────────────────────────────
 $stmt = $pdo->query("SELECT * FROM vw_full_event ORDER BY event_StartDate ASC");
