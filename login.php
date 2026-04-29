@@ -1,6 +1,6 @@
 <?php
 // ─── login.php ────────────────────────────────────────────────────────
-require_once 'db.php';
+require_once 'db_hosted.php';
 
 // Already logged in → go home
 if (!empty($_SESSION['auth_user_id'])) {

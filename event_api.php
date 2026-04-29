@@ -1,6 +1,6 @@
 <?php
 // ─── event_api.php — Unified Event Insert / Update API ───────────────
-require_once 'db.php';
+require_once 'db_hosted.php';
 require_once 'auth.php';
 
 header('Content-Type: application/json');

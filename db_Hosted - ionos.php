@@ -9,10 +9,10 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // ─── DB Configuration ───────────────────────────────────────────────
-define('DB_HOST',    '66.135.5.85');
-define('DB_NAME',    'ngrinsell_croven_events');
-define('DB_USER',    'ngrinsell_steven');
-define('DB_PASS',    't7%&02j4IuolM8&N');
+define('DB_HOST',    'db5020301652.hosting-data.io');
+define('DB_NAME',    'dbs15598765');
+define('DB_USER',    'dbu4053815');
+define('DB_PASS',    'kQ2q4j99r7');
 define('DB_CHARSET', 'utf8mb4');
 
 // ─── Connect ────────────────────────────────────────────────────────

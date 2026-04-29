@@ -1,25 +1,20 @@
 <?php
-require_once 'db.php';
+require_once 'db_hosted.php';
 require_once 'auth.php';
 
-// ─── Quick stats for the home page ──────────────────────────────────
+// ─── Quick stats ─────────────────────────────────────────────────────
 $totalEvents     = $pdo->query("SELECT COUNT(DISTINCT event_ID) FROM vw_full_event")->fetchColumn();
 $totalPerformers = $pdo->query("SELECT COUNT(DISTINCT performer_Name) FROM vw_full_event WHERE performer_Name IS NOT NULL")->fetchColumn();
 
-// watched count is per-user — filter by session user if set
-$sessionUser = $_SESSION['nav_user'] ?? '';
-if ($sessionUser !== '') {
-    $watchedStmt = $pdo->prepare("
-        SELECT COUNT(DISTINCT vfe.performer_Name)
-        FROM vw_full_event vfe
-        JOIN users u ON u.name = ?
-        WHERE vfe.watched = 1
-    ");
-    $watchedStmt->execute([$sessionUser]);
-    $totalWatched = $watchedStmt->fetchColumn();
-} else {
-    $totalWatched = $pdo->query("SELECT COUNT(DISTINCT performer_Name) FROM vw_full_event WHERE watched = 1")->fetchColumn();
-}
+// Watched count is always for the logged-in user
+$watchedStmt = $pdo->prepare("
+    SELECT COUNT(DISTINCT vfe.performer_Name)
+    FROM vw_full_event vfe
+    JOIN users u ON u.name = ?
+    WHERE vfe.watched = 1
+");
+$watchedStmt->execute([$authUserName]);
+$totalWatched = $watchedStmt->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -37,7 +32,6 @@ if ($sessionUser !== '') {
   require 'nav.php';
 ?>
 
-<!-- ══ Home content ══════════════════════════════════════════════════ -->
 <div class="home-wrap">
 
   <div class="home-hero">
@@ -71,7 +65,6 @@ if ($sessionUser !== '') {
       </div>
       <span class="home-nav-card-arrow">›</span>
     </a>
-    <!-- Add more nav cards here as you add pages -->
   </div>
 
 </div>
