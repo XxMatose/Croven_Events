@@ -1,2 +1,3 @@
 # ─── Never commit server environment config ──────────────────────────
 .htaccess
+db_credentials.php
