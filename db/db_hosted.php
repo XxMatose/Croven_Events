@@ -8,17 +8,12 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ─── Load credentials from outside the web root ─────────────────────
-// Project is at: /home/ngrinsell/public_html/crovenlabs.com/events/
-// db.php lives in that folder, so __DIR__ resolves to that path.
-// We go up 4 levels to reach /home/ngrinsell/ (above public_html).
-//
-// __DIR__                                → /home/ngrinsell/public_html/crovenlabs.com/events
-// dirname(__DIR__)                       → /home/ngrinsell/public_html/crovenlabs.com
-// dirname(dirname(__DIR__))              → /home/ngrinsell/public_html
-// dirname(dirname(dirname(__DIR__)))     → /home/ngrinsell  ← credentials go here
+$credentials_file = dirname(dirname(dirname(__DIR__))) . 'db/db_credentials.php';
 
-$credentials_file = dirname(dirname(dirname(__DIR__))) . '/db_credentials.php';
+// ── TEMPORARY DEBUG ──
+echo "Path PHP is checking: " . $credentials_file;
+die();
+// ────────────────────
 
 if (!file_exists($credentials_file)) {
     die("Configuration error: credentials file not found at expected path.");
