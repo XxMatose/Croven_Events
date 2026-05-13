@@ -108,7 +108,7 @@ if ($action === 'insert') {
                 ':pName'    => $pName,
                 ':pOrder'   => (int)($p['order'] ?? ($addedCount + 1)),
                 ':isHead'   => (int)($p['is_headliner'] ?? 0),
-                ':isOpener' => (int)($p['is_opener']    ?? 0),
+                ':isOpener' => (int)($p['is_main_opener'] ?? 0),
                 ':watched'  => (int)($p['watched']       ?? 0),
             ]);
             $stmt->closeCursor();
@@ -194,7 +194,7 @@ if ($action === 'update') {
             $performerId = findOrCreatePerformer($pdo, $pName);
             $order       = (int)($p['order']        ?? 1);
             $isHead      = (int)($p['is_headliner'] ?? 0);
-            $isOpener    = (int)($p['is_opener']    ?? 0);
+            $isOpener    = (int)($p['is_main_opener'] ?? 0);
             $watched     = (int)($p['watched']       ?? 0);
             $epId        = isset($p['ep_id']) ? (int)$p['ep_id'] : 0;
 
@@ -205,14 +205,14 @@ if ($action === 'update') {
                     SET performer_ID     = ?,
                         order_performed  = ?,
                         is_Headliner     = ?,
-                        is_Opener        = ?,
+                        is_main_opener   = ?,
                         watched          = ?
                     WHERE id = ? AND event_ID = ?
                 ")->execute([$performerId, $order, $isHead, $isOpener, $watched, $epId, $eventId]);
             } else {
                 // New performer row — insert
                 $pdo->prepare("
-                    INSERT INTO event_performers (event_ID, performer_ID, order_performed, is_Headliner, is_Opener, watched)
+                    INSERT INTO event_performers (event_ID, performer_ID, order_performed, is_Headliner, is_main_opener, watched)
                     VALUES (?, ?, ?, ?, ?, ?)
                 ")->execute([$eventId, $performerId, $order, $isHead, $isOpener, $watched]);
             }
