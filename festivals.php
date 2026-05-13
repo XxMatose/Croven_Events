@@ -2,6 +2,7 @@
 // ─── festivals.php ────────────────────────────────────────────────────
 require_once 'db/db_hosted.php';
 require_once 'api/auth.php';
+require_once 'imports_logic.php';
 
 // ─── Handle save (AJAX POST) ──────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_festival_id') {
@@ -18,6 +19,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $stmt = $pdo->prepare("UPDATE event SET festival_ID = ? WHERE event_Name = ?");
         $stmt->execute([$festivalId === '' ? null : $festivalId, $eventName]);
         echo json_encode(['success' => true]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => htmlspecialchars($e->getMessage())]);
+    }
+    exit;
+}
+
+// ─── Handle get next festival ID (AJAX POST) ──────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'get_next_festival_id') {
+    header('Content-Type: application/json');
+    try {
+        $pdo->exec("CALL sp_get_next_festival_id(@next_id)");
+        $next = $pdo->query("SELECT @next_id AS next_id")->fetchColumn();
+        echo json_encode(['success' => true, 'next_id' => (int)$next]);
     } catch (Exception $e) {
         echo json_encode(['success' => false, 'error' => htmlspecialchars($e->getMessage())]);
     }
@@ -319,6 +333,34 @@ $pageTitle   = 'Festivals';
 
     .modal-hint.prefilled { color: #22c55e; }
 
+    /* ── Festival ID row with Generate button ─────────────────── */
+    .festival-id-wrap {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .festival-id-wrap input {
+      flex: 1;
+    }
+
+    .btn-generate {
+      padding: 9px 14px;
+      border: 0.5px solid var(--border-strong);
+      border-radius: 8px;
+      background: var(--input-bg);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+    }
+
+    .btn-generate:hover:not(:disabled) { opacity: 0.75; }
+    .btn-generate:disabled { opacity: 0.35; cursor: not-allowed; }
+
     .modal-actions {
       display: flex;
       gap: 8px;
@@ -380,7 +422,7 @@ $pageTitle   = 'Festivals';
 <?php
   $currentPage = 'festivals';
   $pageTitle   = 'Festivals';
-  require 'nav.php';
+  require 'nav.php';;
 ?>
 
 <div class="festivals-wrap">
@@ -393,7 +435,7 @@ $pageTitle   = 'Festivals';
   <!-- ── Tab bar ── -->
   <div class="tab-bar" role="tablist">
     <button class="tab-btn active" role="tab" data-tab="list"     aria-selected="true">Festival List</button>
-    <button class="tab-btn"        role="tab" data-tab="overview" aria-selected="false">Overview</button>
+    <button class="tab-btn"        role="tab" data-tab="imports"  aria-selected="false">Import</button>
     <button class="tab-btn"        role="tab" data-tab="reports"  aria-selected="false">Reports</button>
   </div>
 
@@ -450,9 +492,9 @@ $pageTitle   = 'Festivals';
 
   </div>
 
-  <!-- ── Tab 2: Placeholder ── -->
-  <div class="tab-panel" id="panel-overview" role="tabpanel">
-    <div class="placeholder-panel">🚧 Overview — coming soon</div>
+  <!-- ── Tab 2: Imports ── -->
+  <div class="tab-panel" id="panel-imports" role="tabpanel">
+    <?php include 'imports_partial.php'; ?>
   </div>
 
   <!-- ── Tab 3: Placeholder ── -->
@@ -488,7 +530,10 @@ $pageTitle   = 'Festivals';
 
     <div class="modal-field">
       <label for="festivalIdInput">Festival ID</label>
-      <input type="text" id="festivalIdInput" placeholder="e.g. FEST-2025" autocomplete="off">
+      <div class="festival-id-wrap">
+        <input type="text" id="festivalIdInput" placeholder="e.g. 101" autocomplete="off">
+        <button type="button" id="generateIdBtn" class="btn-generate" disabled>Generate</button>
+      </div>
       <div class="modal-hint" id="modalHint"></div>
     </div>
 
@@ -524,14 +569,16 @@ $pageTitle   = 'Festivals';
   const eventSelect = document.getElementById('eventSelect');
   const festInput   = document.getElementById('festivalIdInput');
   const saveBtn     = document.getElementById('saveBtn');
+  const generateBtn = document.getElementById('generateIdBtn');
   const hint        = document.getElementById('modalHint');
 
   function openModal() {
-    eventSelect.value = '';
-    festInput.value   = '';
-    hint.textContent  = '';
-    hint.className    = 'modal-hint';
-    saveBtn.disabled  = true;
+    eventSelect.value     = '';
+    festInput.value       = '';
+    hint.textContent      = '';
+    hint.className        = 'modal-hint';
+    saveBtn.disabled      = true;
+    generateBtn.disabled  = true;
     modal.classList.add('open');
     setTimeout(() => eventSelect.focus(), 120);
   }
@@ -549,22 +596,24 @@ $pageTitle   = 'Festivals';
   eventSelect.addEventListener('change', () => {
     const opt = eventSelect.selectedOptions[0];
     if (!opt || !opt.value) {
-      festInput.value  = '';
-      hint.textContent = '';
-      hint.className   = 'modal-hint';
-      saveBtn.disabled = true;
+      festInput.value      = '';
+      hint.textContent     = '';
+      hint.className       = 'modal-hint';
+      saveBtn.disabled     = true;
+      generateBtn.disabled = true;
       return;
     }
 
     const existing   = opt.dataset.festival || '';
     festInput.value  = existing;
     saveBtn.disabled = false;
+    generateBtn.disabled = false;
 
     if (existing) {
       hint.textContent = '✔ Existing ID pre-filled — edit to change.';
       hint.className   = 'modal-hint prefilled';
     } else {
-      hint.textContent = 'No Festival ID set yet. Enter one above.';
+      hint.textContent = 'No Festival ID set yet. Enter one above or generate.';
       hint.className   = 'modal-hint';
     }
 
@@ -573,6 +622,36 @@ $pageTitle   = 'Festivals';
 
   festInput.addEventListener('input', () => {
     saveBtn.disabled = !eventSelect.value;
+  });
+
+  // ── Generate next festival ID ──────────────────────────────────
+  generateBtn.addEventListener('click', async () => {
+    generateBtn.disabled    = true;
+    generateBtn.textContent = '…';
+
+    try {
+      const form = new FormData();
+      form.append('action', 'get_next_festival_id');
+
+      const res  = await fetch('festivals.php', { method: 'POST', body: form });
+      const data = await res.json();
+
+      if (data.success) {
+        festInput.value  = data.next_id;
+        hint.textContent = '✔ Next available ID generated.';
+        hint.className   = 'modal-hint prefilled';
+        saveBtn.disabled = false;
+      } else {
+        hint.textContent = data.error || 'Could not generate ID.';
+        hint.className   = 'modal-hint';
+      }
+    } catch (err) {
+      hint.textContent = 'Network error.';
+      hint.className   = 'modal-hint';
+    }
+
+    generateBtn.disabled    = false;
+    generateBtn.textContent = 'Generate';
   });
 
   // ── Save ───────────────────────────────────────────────────────
