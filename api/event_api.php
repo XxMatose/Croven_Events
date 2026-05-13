@@ -183,7 +183,7 @@ if ($action === 'update') {
         foreach ($removedIds as $epId) {
             $epId = (int)$epId;
             if ($epId <= 0) continue;
-            $pdo->prepare("DELETE FROM event_performers WHERE id = ?")->execute([$epId]);
+            $pdo->prepare("DELETE FROM event_performers WHERE record_ID = ?")->execute([$epId]);
         }
 
         // ── 4. Upsert remaining / new performers ──────────────────────
@@ -207,7 +207,7 @@ if ($action === 'update') {
                         is_Headliner     = ?,
                         is_main_opener   = ?,
                         watched          = ?
-                    WHERE id = ? AND event_ID = ?
+                    WHERE record_ID = ? AND event_ID = ?
                 ")->execute([$performerId, $order, $isHead, $isOpener, $watched, $epId, $eventId]);
             } else {
                 // New performer row — insert
