@@ -1,0 +1,30 @@
+================================================================================
+ROCKVILLE 2026 — IMPORT LOGIC DOCUMENT
+Generated: 2026-05-07
+================================================================================
+TABLE: festival_transactions
+--------------------------------------------------------------------------------
+
+  Source Column  ->  DB Field                     Notes
+  -------------      --------                     -----
+  Col A (Day)     -> festival_transactions.day    Values: Thursday, Friday, Saturday, Sunday
+  Col B (Start)   -> festival_transactions.start_Time  e.g. '6:05 PM'
+  Col C (End)     -> festival_transactions.end_Time    e.g. '6:50 PM'
+  Col D (Band)    -> festival_transactions.performer
+  Col E (Stage)   -> festival_transactions.stage  Values: Apex, Octane, Vortex, Inferno, Garage
+
+--------------------------------------------------------------------------------
+TABLE: festival_preferences
+--------------------------------------------------------------------------------
+
+  One record per viewer per row where a value (N or W) exists in that viewer's column.
+
+  Column header format : viewer_name||value
+  viewer_name          -> festival_preferences.viewer
+  'N' (Need)           -> festival_preferences.need = 1, festival_preferences.want = 0
+  'W' (Want)           -> festival_preferences.want = 1, festival_preferences.need = 0
+  Blank / NaN          -> No record inserted for that viewer/row combination
+
+================================================================================
+END OF DOCUMENT
+================================================================================
