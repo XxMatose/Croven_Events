@@ -625,7 +625,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       name,
       order:        parseInt(row.querySelector('.p-order-input').value) || (idx + 1),
       is_headliner: row.querySelector('.p-head-cb').checked   ? 1 : 0,
-      is_opener:    row.querySelector('.p-opener-cb').checked  ? 1 : 0,
+      is_main_opener: row.querySelector('.p-opener-cb').checked  ? 1 : 0,
       watched:      row.querySelector('.p-watched-cb').checked ? 1 : 0,
     });
   });
