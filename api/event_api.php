@@ -219,7 +219,20 @@ if ($action === 'update') {
         }
 
         $pdo->commit();
-        echo json_encode(['success' => true]);
+
+        // Return the fresh performer list with record_IDs so the frontend can sync allEvents
+        $epStmt = $pdo->prepare("
+            SELECT ep.record_ID AS ep_id, p.performer_Name AS name,
+                   ep.order_performed, ep.is_Headliner, ep.is_main_opener, ep.watched
+            FROM event_performers ep
+            JOIN performer p ON ep.performer_ID = p.performer_ID
+            WHERE ep.event_ID = ?
+            ORDER BY ep.order_performed
+        ");
+        $epStmt->execute([$eventId]);
+        $freshPerformers = $epStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'performers' => $freshPerformers]);
 
     } catch (PDOException $e) {
         $pdo->rollBack();

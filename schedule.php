@@ -1750,6 +1750,29 @@ document.getElementById('emBtnSave').addEventListener('click', async () => {
 
     if (data.success) {
       setEmFeedback('Saved!', 'success');
+
+      // Sync allEvents so reopening the modal has correct ep_ids
+      const evIdx = allEvents.findIndex(e => e.event_ID === editingEventId);
+      if (evIdx !== -1) {
+        allEvents[evIdx].event_Name      = eventName;
+        allEvents[evIdx].event_StartDate = startDate;
+        allEvents[evIdx].event_EndDate   = endDate;
+        allEvents[evIdx].venue_Name      = venueName;
+        allEvents[evIdx].venue_City      = venueCity;
+        allEvents[evIdx].venue_State     = venueState;
+        // Use fresh performers from API (includes new record_IDs)
+        if (data.performers) {
+          allEvents[evIdx].performers = data.performers.map(p => ({
+            ep_id:           p.ep_id,
+            name:            p.name,
+            is_Headliner:    p.is_Headliner,
+            is_Opener:       p.is_main_opener,
+            order_performed: p.order_performed,
+            watched:         p.watched == 1,
+          }));
+        }
+      }
+
       updateCardInPlace(editingEventId, { eventName, startDate, endDate, venueName, venueCity, venueState, performers });
       setTimeout(closeEditModal, 900);
     } else {
