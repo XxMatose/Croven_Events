@@ -25,6 +25,7 @@ foreach ($rows as $row) {
             'venue_Name'      => $row['venue_Name'],
             'venue_City'      => $row['venue_City'],
             'venue_State'     => $row['venue_State'],
+            'memory_path'     => $row['memory_path'] ?? null,
             'performers'      => [],
         ];
     }
@@ -34,7 +35,7 @@ foreach ($rows as $row) {
             'ep_id'           => $row['ep_id'] ?? null,   // event_performers PK
             'name'            => $row['performer_Name'],
             'is_Headliner'    => $row['is_Headliner'],
-            'is_Opener'       => $row['is_Opener'] ?? 0,
+            'is_Opener'       => $row['is_main_opener'] ?? 0,
             'order_performed' => $row['order_performed'],
             'watched'         => (int)$row['watched'] === 1,
         ];
@@ -74,6 +75,7 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Schedule – Croven Events</title>
   <link rel="stylesheet" href="css/styles.css">
+
 </head>
 <body>
 
@@ -163,6 +165,15 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
             <?= htmlspecialchars(implode(', ', $cityState)) ?>
           </div>
         <?php endif; ?>
+      <?php endif; ?>
+
+      <?php if (!empty($event['memory_path'])): ?>
+        <a class="memories-link"
+           href="#"
+           data-memory-path="<?= htmlspecialchars($event['memory_path']) ?>"
+           onclick="openMemoriesModal(this); return false;">
+          ✦ Memories
+        </a>
       <?php endif; ?>
 
       <hr class="divider">
@@ -301,21 +312,372 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
 }
 .fav-shake { animation: fav-shake 0.35s ease; }
 
-/* ══════════════════════════════════════════════════════════════════
-   EDIT EVENT MODAL
-══════════════════════════════════════════════════════════════════ */
-.edit-modal-overlay {
+/* ── Memories link ────────────────────────────────────────────────── */
+.memories-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 0 2px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent, #a78bfa);
+  text-decoration: none;
+  border: 1px solid var(--accent, #a78bfa);
+  border-radius: 20px;
+  opacity: 0.75;
+  transition: opacity 0.15s, background 0.15s;
+}
+.memories-link:hover { opacity: 1; background: rgba(167,139,250,0.1); }
+
+/* ── Memories modal ───────────────────────────────────────────────── */
+.memories-modal-overlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(4px);
-  z-index: 900;
+  background: rgba(0,0,0,0.82);
+  z-index: 960;
   align-items: center;
   justify-content: center;
   padding: 20px;
 }
-.edit-modal-overlay.open { display: flex; }
+.memories-modal-overlay.open { display: flex; }
+
+.memories-modal {
+  background: #0d0d0d;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 960px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.8);
+  overflow: hidden;
+}
+
+.memories-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.memories-modal-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+.memories-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: #fff;
+  opacity: 0.4;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition: opacity 0.15s;
+}
+.memories-modal-close:hover { opacity: 1; }
+
+.memories-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  background: #0d0d0d;
+  min-height: 0;
+}
+
+/* ── Thumbnail grid ── */
+.memories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+  padding: 12px;
+}
+.memories-thumb {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #1a1a1a;
+  position: relative;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.memories-thumb:hover { transform: scale(1.03); opacity: 0.88; }
+.memories-thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.memories-thumb-play {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.28);
+  pointer-events: none;
+}
+.memories-thumb-play::after {
+  content: "";
+  width: 0; height: 0;
+  border-style: solid;
+  border-width: 13px 0 13px 22px;
+  border-color: transparent transparent transparent rgba(255,255,255,0.92);
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.7));
+}
+
+/* ── Loading / error / empty ── */
+.memories-loading, .memories-error, .memories-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 260px;
+  color: rgba(255,255,255,0.35);
+  font-size: 0.85rem; gap: 12px;
+}
+.memories-loading-spinner {
+  width: 28px; height: 28px;
+  border: 3px solid rgba(255,255,255,0.1);
+  border-top-color: rgba(255,255,255,0.55);
+  border-radius: 50%;
+  animation: mem-spin 0.7s linear infinite;
+}
+@keyframes mem-spin { to { transform: rotate(360deg); } }
+
+/* ── Custom lightbox (mlb = Memories LightBox) ── */
+.mlb-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.96);
+  z-index: 1200;
+  flex-direction: column;
+}
+.mlb-overlay.open { display: flex; }
+
+/* Top toolbar */
+.mlb-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.4);
+}
+.mlb-counter {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.06em;
+  min-width: 60px;
+}
+.mlb-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mlb-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.75);
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+  display: flex; align-items: center; gap: 5px;
+}
+.mlb-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+.mlb-btn:disabled { opacity: 0.2; cursor: default; pointer-events: none; }
+.mlb-btn-close {
+  background: rgba(255,60,60,0.15);
+  border-color: rgba(255,80,80,0.25);
+  color: rgba(255,120,120,0.9);
+}
+.mlb-btn-close:hover { background: rgba(255,60,60,0.3); color: #fff; }
+
+/* Media stage */
+.mlb-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Prev / next nav arrows */
+.mlb-nav {
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #fff;
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 2;
+  line-height: 1;
+}
+.mlb-nav:hover { opacity: 1; background: rgba(0,0,0,0.8); }
+.mlb-nav:disabled { opacity: 0.1; cursor: default; pointer-events: none; }
+.mlb-nav-prev { left: 12px; }
+.mlb-nav-next { right: 12px; }
+
+/* The wrapper that rotates — only this rotates, NOT the video controls */
+.mlb-media-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+  transition: transform 0.28s ease;
+  transform-origin: center center;
+}
+.mlb-media-wrap img {
+  max-width: 100%; max-height: 80vh;
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+  user-select: none;
+}
+/* Video outer: column flex — rotating frame on top, custom controls pinned below */
+.mlb-video-outer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 90vw;
+  max-height: 85vh;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+}
+/* Rotating wrapper — ONLY this spins */
+.mlb-video-rotate {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: transform 0.28s ease;
+  transform-origin: center center;
+}
+.mlb-video-rotate video {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  background: #000;
+}
+/* Custom controls — sibling of .mlb-video-rotate, never rotates */
+.mlb-vc {
+  flex-shrink: 0;
+  padding: 7px 10px 8px;
+  background: rgba(0,0,0,0.75);
+}
+.mlb-vc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mlb-vc-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.8);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 5px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+.mlb-vc-btn:hover { color: #fff; }
+.mlb-vc-seek {
+  flex: 1;
+  height: 4px;
+  cursor: pointer;
+  accent-color: rgba(255,255,255,0.85);
+}
+.mlb-vc-time {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+/* Thumbnail strip */
+.mlb-strip {
+  display: flex;
+  gap: 5px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.4);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+.mlb-strip-thumb {
+  flex-shrink: 0;
+  width: 64px; height: 48px;
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s, opacity 0.15s;
+  opacity: 0.55;
+  position: relative;
+}
+.mlb-strip-thumb.active { border-color: rgba(255,255,255,0.8); opacity: 1; }
+.mlb-strip-thumb:hover { opacity: 0.85; }
+.mlb-strip-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mlb-strip-thumb-play {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.25);
+}
+.mlb-strip-thumb-play::after {
+  content: "";
+  width: 0; height: 0;
+  border-style: solid;
+  border-width: 7px 0 7px 12px;
+  border-color: transparent transparent transparent rgba(255,255,255,0.9);
+}
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .memories-modal-overlay { padding: 0; }
+  .memories-modal {
+    max-width: 100%; max-height: 100dvh;
+    height: 100dvh; border-radius: 0; border: none;
+  }
+  .memories-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 4px; padding: 8px;
+  }
+  .mlb-nav { width: 38px; height: 38px; font-size: 1.1rem; }
+  .mlb-nav-prev { left: 6px; }
+  .mlb-nav-next { right: 6px; }
+}
+
+
+.edit-modal-overlay {
+  display: none !important;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  z-index: 1100;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.edit-modal-overlay.open { display: flex !important; }
 
 .edit-modal {
   background: var(--card-bg);
@@ -327,7 +689,7 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
   display: flex;
   flex-direction: column;
   box-shadow: 0 24px 64px rgba(0,0,0,0.45);
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* Header */
@@ -666,6 +1028,30 @@ body.red .em-btn-save { background: #ff2b2b; }
         <button type="submit" class="fav-submit">Save Favorite</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ══ Memories Modal ════════════════════════════════════════════════ -->
+<div class="memories-modal-overlay" id="memoriesModalOverlay">
+  <div class="memories-modal" id="memoriesModal">
+
+    <div class="memories-modal-header">
+      <span class="memories-modal-title">✦ Memories</span>
+      <button class="memories-modal-close" id="memoriesModalClose">&times;</button>
+    </div>
+
+    <div class="memories-modal-body" id="memoriesModalBody">
+
+      <!-- Loading / error placeholder -->
+      <div class="memories-loading" id="memoriesLoading">
+        <div class="memories-loading-spinner"></div>
+        <span>Loading memories…</span>
+      </div>
+
+      <!-- thumbnail grid -->
+      <div class="memories-grid" id="memoriesGrid" style="display:none"></div>
+
+    </div>
   </div>
 </div>
 
@@ -1332,7 +1718,7 @@ document.getElementById('emBtnSave').addEventListener('click', async () => {
       name,
       order:        parseInt(row.querySelector('.em-p-order').value) || (idx + 1),
       is_headliner: row.querySelector('.em-p-head').checked    ? 1 : 0,
-      is_opener:    row.querySelector('.em-p-opener').checked  ? 1 : 0,
+      is_main_opener: row.querySelector('.em-p-opener').checked  ? 1 : 0,
       watched:      row.querySelector('.em-p-watched').checked ? 1 : 0,
     });
   });
@@ -1460,6 +1846,342 @@ function setEmFeedback(msg, type) {
   el.textContent = msg;
   el.className = 'em-feedback' + (type ? ' ' + type : '');
 }
+
+// ── Memories Modal — custom lightbox ────────────────────────────────
+(function () {
+  /* ── DOM refs ── */
+  var overlay  = document.getElementById('memoriesModalOverlay');
+  var closeBtn = document.getElementById('memoriesModalClose');
+  var gridEl   = document.getElementById('memoriesGrid');
+  var loading  = document.getElementById('memoriesLoading');
+
+  /* ── State ── */
+  var allFiles   = [];
+  var currentIdx = 0;
+  var rotation   = 0;   // degrees, for image wrap or video inner
+  var currentPath = '';  // OneDrive share path, stored for re-fetching fresh video URLs
+
+  /* ── Custom lightbox elements (built once, reused) ── */
+  var mlb = null;  // the overlay element
+
+  function buildLightbox() {
+    if (mlb) return;
+    mlb = document.createElement('div');
+    mlb.className = 'mlb-overlay';
+    mlb.innerHTML =
+      '<div class="mlb-toolbar">' +
+        '<span class="mlb-counter" id="mlbCounter"></span>' +
+        '<div class="mlb-toolbar-actions">' +
+          '<button class="mlb-btn" id="mlbRotL" title="Rotate left">&#8634;</button>' +
+          '<button class="mlb-btn" id="mlbRotR" title="Rotate right">&#8635;</button>' +
+          '<button class="mlb-btn mlb-btn-close" id="mlbClose" title="Close">&#10005;</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mlb-stage" id="mlbStage">' +
+        '<button class="mlb-nav mlb-nav-prev" id="mlbPrev">&#8249;</button>' +
+        '<button class="mlb-nav mlb-nav-next" id="mlbNext">&#8250;</button>' +
+      '</div>' +
+      '<div class="mlb-strip" id="mlbStrip"></div>';
+    document.body.appendChild(mlb);
+
+    document.getElementById('mlbClose').addEventListener('click', closeLightbox);
+    document.getElementById('mlbRotL').addEventListener('click', function() { rotate(-90); });
+    document.getElementById('mlbRotR').addEventListener('click', function() { rotate(+90); });
+    document.getElementById('mlbPrev').addEventListener('click', function() { go(currentIdx - 1); });
+    document.getElementById('mlbNext').addEventListener('click', function() { go(currentIdx + 1); });
+
+    mlb.addEventListener('click', function(e) {
+      if (e.target === mlb || e.target.id === 'mlbStage') closeLightbox();
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (!mlb || !mlb.classList.contains('open')) return;
+      if (e.key === 'ArrowLeft')  { go(currentIdx - 1); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { go(currentIdx + 1); e.preventDefault(); }
+      if (e.key === 'Escape')     closeLightbox();
+    });
+  }
+
+  function openLightbox(idx) {
+    buildLightbox();
+    buildStrip();
+    rotation = 0;
+    go(idx);
+    mlb.classList.add('open');
+  }
+
+  function closeLightbox() {
+    if (!mlb) return;
+    pauseVideo();
+    mlb.classList.remove('open');
+  }
+
+  function go(idx) {
+    if (idx < 0 || idx >= allFiles.length) return;
+    pauseVideo();
+    currentIdx = idx;
+    rotation   = 0;
+    renderMedia();
+    updateStrip();
+    document.getElementById('mlbCounter').textContent = (idx + 1) + ' / ' + allFiles.length;
+    document.getElementById('mlbPrev').disabled = idx === 0;
+    document.getElementById('mlbNext').disabled = idx === allFiles.length - 1;
+  }
+
+  function rotate(deg) {
+    rotation = (rotation + deg + 360) % 360;
+    var sideways = rotation === 90 || rotation === 270;
+    var file = allFiles[currentIdx];
+    if (file.type === 'video') {
+      var vr = document.getElementById('mlbVideoRotate');
+      if (!vr) return;
+      vr.style.transform = 'rotate(' + rotation + 'deg)';
+      vr.style.width  = sideways ? '75vh' : '';
+      vr.style.height = sideways ? '75vw' : '';
+    } else {
+      var wrap = document.getElementById('mlbMediaWrap');
+      if (!wrap) return;
+      wrap.style.transform = 'rotate(' + rotation + 'deg)';
+      var img = wrap.querySelector('img');
+      if (img) {
+        img.style.maxWidth  = sideways ? '80vh' : '';
+        img.style.maxHeight = sideways ? '90vw' : '';
+      }
+    }
+  }
+
+  function renderMedia() {
+    var stage  = document.getElementById('mlbStage');
+    var prev   = document.getElementById('mlbPrev');
+    var next   = document.getElementById('mlbNext');
+    // Remove old media (keep nav buttons)
+    Array.from(stage.children).forEach(function(c) {
+      if (!c.classList.contains('mlb-nav')) c.remove();
+    });
+
+    var file = allFiles[currentIdx];
+    if (file.type === 'video') {
+      var proxyUrl = 'api/onedrive_proxy.php?url=' + encodeURIComponent(file.url);
+
+      var outer = document.createElement('div');
+      outer.className = 'mlb-video-outer';
+
+      // ── Rotating frame (only this spins) ─────────────────────────
+      var inner = document.createElement('div');
+      inner.id        = 'mlbVideoRotate';
+      inner.className = 'mlb-video-rotate';
+
+      var vid = document.createElement('video');
+      vid.id          = 'mlbVid';
+      vid.controls    = false;      // hide native controls — we build our own
+      vid.playsinline = true;
+      vid.preload     = 'metadata';
+      if (file.poster) vid.poster = file.poster;
+      inner.appendChild(vid);
+      outer.appendChild(inner);
+
+      // NOTE: src is set AFTER outer is appended to the DOM (below),
+      // so the browser can properly resolve the network request.
+
+      // ── Custom controls (sibling — never rotates) ─────────────────
+      var vc = document.createElement('div');
+      vc.className = 'mlb-vc';
+      vc.innerHTML =
+        '<div class="mlb-vc-row">' +
+          '<button class="mlb-vc-btn" id="mlbPlay" title="Play/Pause">&#9654;</button>' +
+          '<input  class="mlb-vc-seek" id="mlbSeek" type="range" min="0" max="100" step="0.1" value="0">' +
+          '<span   class="mlb-vc-time" id="mlbTime">0:00 / 0:00</span>' +
+          '<button class="mlb-vc-btn" id="mlbMute" title="Mute">&#128266;</button>' +
+          '<button class="mlb-vc-btn" id="mlbFull" title="Fullscreen">&#9974;</button>' +
+        '</div>';
+      outer.appendChild(vc);
+      stage.insertBefore(outer, next);
+
+      // Wire controls
+      var seek    = document.getElementById('mlbSeek');
+      var timeEl  = document.getElementById('mlbTime');
+      var playBtn = document.getElementById('mlbPlay');
+      var muteBtn = document.getElementById('mlbMute');
+      var fullBtn = document.getElementById('mlbFull');
+
+      function fmt(s) {
+        s = Math.floor(s || 0);
+        return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+      }
+      vid.addEventListener('loadedmetadata', function () {
+        seek.max = vid.duration;
+        timeEl.textContent = fmt(0) + ' / ' + fmt(vid.duration);
+      });
+      vid.addEventListener('timeupdate', function () {
+        if (!seek._drag) seek.value = vid.currentTime;
+        timeEl.textContent = fmt(vid.currentTime) + ' / ' + fmt(vid.duration);
+      });
+      vid.addEventListener('play',  function () { playBtn.innerHTML = '&#9646;&#9646;'; });
+      vid.addEventListener('pause', function () { playBtn.innerHTML = '&#9654;'; });
+      vid.addEventListener('ended', function () { playBtn.innerHTML = '&#9654;'; });
+
+      playBtn.addEventListener('click', function () {
+        vid.paused ? vid.play() : vid.pause();
+      });
+      seek.addEventListener('mousedown',  function () { seek._drag = true; });
+      seek.addEventListener('touchstart', function () { seek._drag = true; }, { passive: true });
+      seek.addEventListener('input',      function () { vid.currentTime = seek.value; });
+      seek.addEventListener('mouseup',    function () { seek._drag = false; });
+      seek.addEventListener('touchend',   function () { seek._drag = false; });
+      muteBtn.addEventListener('click', function () {
+        vid.muted = !vid.muted;
+        muteBtn.innerHTML = vid.muted ? '&#128263;' : '&#128266;';
+      });
+      fullBtn.addEventListener('click', function () {
+        if (vid.requestFullscreen) vid.requestFullscreen();
+        else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
+      });
+
+      // Set src after outer is in the DOM so the browser can load it properly
+      vid.src = proxyUrl;
+      vid.load();
+
+    } else {
+      var wrap = document.createElement('div');
+      wrap.id  = 'mlbMediaWrap';
+      wrap.className = 'mlb-media-wrap';
+      var img = document.createElement('img');
+      img.src = file.url;
+      img.alt = file.filename;
+      wrap.appendChild(img);
+      stage.insertBefore(wrap, next);
+    }
+  }
+
+  function pauseVideo() {
+    if (!mlb) return;
+    mlb.querySelectorAll('video').forEach(function(v) { v.pause(); });
+  }
+
+  function buildStrip() {
+    var strip = document.getElementById('mlbStrip');
+    strip.innerHTML = '';
+    allFiles.forEach(function(file, idx) {
+      var t = document.createElement('div');
+      t.className  = 'mlb-strip-thumb';
+      t.dataset.idx = idx;
+      var img = document.createElement('img');
+      img.src     = file.thumb || file.url;
+      img.alt     = '';
+      img.loading = 'lazy';
+      t.appendChild(img);
+      if (file.type === 'video') {
+        var p = document.createElement('div');
+        p.className = 'mlb-strip-thumb-play';
+        t.appendChild(p);
+      }
+      t.addEventListener('click', function() { go(idx); });
+      strip.appendChild(t);
+    });
+  }
+
+  function updateStrip() {
+    if (!mlb) return;
+    var strip  = document.getElementById('mlbStrip');
+    var thumbs = strip.querySelectorAll('.mlb-strip-thumb');
+    thumbs.forEach(function(t, i) {
+      t.classList.toggle('active', i === currentIdx);
+    });
+    // Scroll active thumb into view
+    if (thumbs[currentIdx]) {
+      thumbs[currentIdx].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }
+
+  /* ── Thumbnail grid ── */
+  function buildGallery(files) {
+    allFiles = files;
+    gridEl.innerHTML = '';
+
+    files.forEach(function(file, idx) {
+      var thumb = document.createElement('div');
+      thumb.className = 'memories-thumb';
+
+      var img = document.createElement('img');
+      img.src     = file.thumb || file.url;
+      img.alt     = file.filename;
+      img.loading = 'lazy';
+      thumb.appendChild(img);
+
+      if (file.type === 'video') {
+        var badge = document.createElement('div');
+        badge.className = 'memories-thumb-play';
+        thumb.appendChild(badge);
+      }
+
+      thumb.addEventListener('click', function() { openLightbox(idx); });
+      gridEl.appendChild(thumb);
+    });
+
+    loading.style.display = 'none';
+    gridEl.style.display  = 'grid';
+  }
+
+  /* ── Modal open / close ── */
+  window.openMemoriesModal = function (linkEl) {
+    var path = linkEl.dataset.memoryPath;
+    currentPath = path;
+    overlay.classList.add('open');
+    showLoading();
+    fetchFiles(path);
+  };
+
+  async function fetchFiles(path) {
+    try {
+      var res  = await fetch('api/memory_files.php?path=' + encodeURIComponent(path));
+      var data = await res.json();
+      if (data.error) { showError(data.error); return; }
+      var files = data.files || [];
+      if (files.length === 0) { showEmpty(); return; }
+      buildGallery(files);
+    } catch (e) {
+      showError('Could not load memories.');
+    }
+  }
+
+  function closeModal() {
+    closeLightbox();
+    overlay.classList.remove('open');
+    setTimeout(function () {
+      allFiles = [];
+      gridEl.innerHTML     = '';
+      gridEl.style.display = 'none';
+      showLoading();
+    }, 200);
+  }
+
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeModal();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (!overlay.classList.contains('open')) return;
+    if (e.key === 'Escape' && (!mlb || !mlb.classList.contains('open'))) closeModal();
+  });
+
+  function showLoading() {
+    loading.innerHTML = '<div class="memories-loading-spinner"></div><span>Loading memories\u2026</span>';
+    loading.className = 'memories-loading';
+    loading.style.display = 'flex';
+    gridEl.style.display  = 'none';
+  }
+  function showError(msg) {
+    loading.innerHTML = '<span style="font-size:1.4rem">&#9888;</span><span>' + escHtml(msg) + '</span>';
+    loading.className = 'memories-error';
+    loading.style.display = 'flex';
+  }
+  function showEmpty() {
+    loading.innerHTML = '<span style="font-size:1.4rem">&#128444;</span><span>No photos or videos found.</span>';
+    loading.className = 'memories-empty';
+    loading.style.display = 'flex';
+  }
+})();
+
 
 function escHtml(s) {
   return String(s)
