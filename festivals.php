@@ -2,6 +2,7 @@
 // ─── festivals.php ────────────────────────────────────────────────────
 require_once 'db/db_hosted.php';
 require_once 'api/auth.php';
+require_once 'imports_logic.php';
 
 // ─── Handle save (AJAX POST) ──────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_festival_id') {
@@ -380,7 +381,7 @@ $pageTitle   = 'Festivals';
 <?php
   $currentPage = 'festivals';
   $pageTitle   = 'Festivals';
-  require 'nav.php';
+  require 'nav.php';;
 ?>
 
 <div class="festivals-wrap">
@@ -393,7 +394,7 @@ $pageTitle   = 'Festivals';
   <!-- ── Tab bar ── -->
   <div class="tab-bar" role="tablist">
     <button class="tab-btn active" role="tab" data-tab="list"     aria-selected="true">Festival List</button>
-    <button class="tab-btn"        role="tab" data-tab="overview" aria-selected="false">Overview</button>
+    <button class="tab-btn"        role="tab" data-tab="imports"  aria-selected="false">Import</button>
     <button class="tab-btn"        role="tab" data-tab="reports"  aria-selected="false">Reports</button>
   </div>
 
@@ -450,9 +451,9 @@ $pageTitle   = 'Festivals';
 
   </div>
 
-  <!-- ── Tab 2: Placeholder ── -->
-  <div class="tab-panel" id="panel-overview" role="tabpanel">
-    <div class="placeholder-panel">🚧 Overview — coming soon</div>
+  <!-- ── Tab 2: Imports ── -->
+  <div class="tab-panel" id="panel-imports" role="tabpanel">
+    <?php include 'imports_partial.php'; ?>
   </div>
 
   <!-- ── Tab 3: Placeholder ── -->
