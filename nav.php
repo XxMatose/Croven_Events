@@ -24,6 +24,7 @@ $navItems = [
     'schedule'  => ['label' => 'Schedule',  'href' => 'schedule.php',  'icon' => '📅'],
     'new'       => ['label' => 'Add Event', 'href' => 'add_event.php', 'icon' => '➕'],
     'favorites' => ['label' => 'Favorites', 'href' => 'favorites.php', 'icon' => '⭐'],
+    'festivals' => ['label' => 'Festivals', 'href' => 'festivals.php', 'icon' => '🛠️'],
     'admin'     => ['label' => 'Admin',     'href' => 'admin.php',     'icon' => '🛠️'],
 ];
 

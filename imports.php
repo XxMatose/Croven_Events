@@ -28,15 +28,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         exit;
     }
 
-    // Find the logic file
-    $logic_file = __DIR__ . '/import/logic/' . $festival_name . '.txt';
-    if (!file_exists($logic_file)) {
-        echo json_encode(['success' => false, 'errors' => ["Logic file not found: {$festival_name}.txt"]]);
+    // Find the logic
+    $stmt = $pdo->prepare("SELECT * FROM import_logic WHERE festival_id = ?");
+    $stmt->execute([$festival_id]);
+    $logic_row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$logic_row) {
+        echo json_encode(['success' => false, 'errors' => ["No import logic configured for this festival."]]);
         exit;
     }
 
-    // Parse the logic file
-    $logic = parse_logic_file($logic_file);
+    $logic = [
+        'column_map'   => build_column_map(json_decode($logic_row['column_map'], true)),
+        'valid_days'   => json_decode($logic_row['valid_days'], true),
+        'valid_stages' => json_decode($logic_row['valid_stages'], true),
+    ];
     if (!$logic) {
         echo json_encode(['success' => false, 'errors' => ['Could not parse logic file.']]);
         exit;
@@ -59,6 +65,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $result = parse_spreadsheet($tmp, $logic);
 
     echo json_encode($result);
+    exit;
+}
+
+// ─────────────────────────────────────────────
+// AJAX: Check existing data endpoint
+// ─────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'check_existing') {
+    header('Content-Type: application/json');
+
+    $festival_id = $_POST['festival_id'] ?? '';
+    if (!$festival_id) {
+        echo json_encode(['success' => false, 'exists' => false]);
+        exit;
+    }
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM festival_transactions WHERE festival_ID = ?");
+    $stmt->execute([$festival_id]);
+    $count = (int)$stmt->fetchColumn();
+
+    echo json_encode(['success' => true, 'exists' => $count > 0, 'count' => $count]);
     exit;
 }
 
@@ -139,31 +165,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// ─────────────────────────────────────────────
-// Helper: Parse the .txt logic file
-// ─────────────────────────────────────────────
-function parse_logic_file($path) {
-    $content = file_get_contents($path);
-    $lines   = array_map('trim', explode("\n", $content));
-    $logic   = ['column_map' => []];
 
-    foreach ($lines as $line) {
-        // Match column mapping lines: Col X (Label) -> table.field
-        // Field name match is case-insensitive; original casing from txt is preserved
-        if (preg_match('/Col\s+([A-Z])\s+\(([^)]+)\)\s*->\s*([\w]+)\.([\w]+)/i', $line, $m)) {
-            $col_letter = strtoupper($m[1]);
-            $col_index  = ord($col_letter) - ord('A'); // A=0, B=1, etc.
-            $logic['column_map'][$col_index] = [
-                'table' => $m[3],
-                'field' => $m[4], // exact casing from txt used in insert
-                'label' => trim($m[2])
-            ];
-        }
+// ─────────────────────────────────────────────
+// Helper: convert the letter-keyed JSON into the numberic-index format
+// ─────────────────────────────────────────────
+function build_column_map(array $letter_map): array {
+    $col_map = [];
+    foreach ($letter_map as $letter => $mapping) {
+        $idx = ord(strtoupper($letter)) - ord('A');
+        $col_map[$idx] = $mapping;
     }
-
-    return (!empty($logic['column_map'])) ? $logic : null;
+    return $col_map;
 }
-
 // ─────────────────────────────────────────────
 // Helper: Parse the uploaded spreadsheet
 // ─────────────────────────────────────────────
@@ -262,8 +275,8 @@ function parse_spreadsheet($tmp_path, $logic) {
     // Extract transaction fields using case-insensitive keys
     $get_col = fn($field) => $field_col[strtolower($field)] ?? null;
 
-    $valid_days   = ['thursday','friday','saturday','sunday','monday','tuesday','wednesday'];
-    $valid_stages = ['apex','octane','vortex','inferno','garage'];
+    $valid_days   = $logic['valid_days'];
+    $valid_stages = $logic['valid_stages'];
     $valid_prefs  = ['n','w'];
 
     foreach ($raw_rows as $row) {
@@ -702,6 +715,52 @@ function col_letter_to_index($col) {
         /* ── Hidden ── */
         .hidden { display: none !important; }
 
+        /* ── Confirm Modal ── */
+        #confirm-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(13,15,20,.80);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(3px);
+        }
+        .modal-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 36px 40px;
+            max-width: 480px;
+            width: 90%;
+        }
+        .modal-box h3 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 22px;
+            letter-spacing: 2px;
+            color: var(--danger);
+            margin-bottom: 14px;
+        }
+        .modal-box p {
+            font-size: 14px;
+            color: var(--text-dim);
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .modal-box p strong {
+            color: var(--text);
+        }
+        .modal-divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 24px 0;
+        }
+        .modal-btn-row {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
         /* ── Loader overlay ── */
         #loader {
             position: fixed;
@@ -741,6 +800,20 @@ function col_letter_to_index($col) {
     <div class="loader-box">
         <div class="big-spin"></div>
         <p id="loader-msg">Processing...</p>
+    </div>
+</div>
+
+<!-- ── Existing data confirmation modal ── -->
+<div id="confirm-modal" class="hidden">
+    <div class="modal-box">
+        <h3>⚠ Existing Data Detected</h3>
+        <p>There are already <strong id="modal-count"></strong> set times recorded for <strong id="modal-festival-name"></strong>.</p>
+        <p>Proceeding will <strong style="color:var(--danger);">permanently delete</strong> all existing set times and viewer preferences for this festival before importing the new data.</p>
+        <hr class="modal-divider">
+        <div class="modal-btn-row">
+            <button class="btn btn-reset" id="modal-cancel">Cancel</button>
+            <button class="btn btn-import" id="modal-proceed">Proceed with Import</button>
+        </div>
     </div>
 </div>
 
@@ -847,6 +920,7 @@ const loaderMsg      = document.getElementById('loader-msg');
 let selectedFile     = null;
 let previewRows      = null;
 let previewViewers   = [];
+let importing        = false;
 
 // ── File selection ──
 fileInput.addEventListener('change', () => {
@@ -891,6 +965,7 @@ btnReset.addEventListener('click', () => {
     previewSection.classList.add('hidden');
     previewRows = null;
     previewViewers = [];
+    importing = false;
     btnPreview.disabled = true;
     document.getElementById('import-result').classList.add('hidden');
 });
@@ -925,6 +1000,49 @@ btnImport.addEventListener('click', async () => {
     const festivalId   = festivalSelect.value;
     const festivalName = festivalSelect.options[festivalSelect.selectedIndex].dataset.name;
 
+    // Check if existing data exists for this festival before importing
+    showLoader('Checking for existing data...');
+    try {
+        const checkFd = new FormData();
+        checkFd.append('action', 'check_existing');
+        checkFd.append('festival_id', festivalId);
+
+        const checkRes  = await fetch(window.location.href, { method: 'POST', body: checkFd });
+        const checkData = await checkRes.json();
+        hideLoader();
+
+        if (checkData.exists) {
+            // Show confirmation modal
+            document.getElementById('modal-count').textContent = checkData.count + ' set time' + (checkData.count !== 1 ? 's' : '');
+            document.getElementById('modal-festival-name').textContent = festivalName;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        } else {
+            // No existing data — import directly
+            await runImport(festivalId, festivalName);
+        }
+    } catch(e) {
+        hideLoader();
+        showAlert('Unexpected error during check: ' + e.message, 'danger');
+    }
+});
+
+// ── Modal buttons ──
+document.getElementById('modal-cancel').addEventListener('click', () => {
+    document.getElementById('confirm-modal').classList.add('hidden');
+});
+
+document.getElementById('modal-proceed').addEventListener('click', async () => {
+    document.getElementById('confirm-modal').classList.add('hidden');
+    const festivalId   = festivalSelect.value;
+    const festivalName = festivalSelect.options[festivalSelect.selectedIndex].dataset.name;
+    await runImport(festivalId, festivalName);
+});
+
+// ── Shared import logic ──
+async function runImport(festivalId, festivalName) {
+    if (importing) return;
+    importing = true;
+    btnImport.disabled = true;
     const fd = new FormData();
     fd.append('action', 'import');
     fd.append('festival_id', festivalId);
@@ -950,13 +1068,17 @@ btnImport.addEventListener('click', async () => {
             btnImport.disabled = true;
             document.getElementById('clean-block').classList.add('hidden');
         } else {
+            importing = false;
+            btnImport.disabled = false;
             resultDiv.innerHTML = `<div class="alert alert-danger">✕ &nbsp;${escHtml(data.message)}</div>`;
         }
     } catch(e) {
+        importing = false;
+        btnImport.disabled = false;
         hideLoader();
         showAlert('Unexpected error during import: ' + e.message, 'danger');
     }
-});
+}
 
 // ── Render preview ──
 function renderPreview(data) {

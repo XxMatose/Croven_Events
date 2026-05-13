@@ -83,9 +83,7 @@ if ($action === 'insert') {
     }
 
     try {
-        $pdo->beginTransaction();
-
-        // Use the existing stored procedure for each performer (it handles find-or-create internally)
+        // Stored procedure manages its own transaction internally
         $addedCount = 0;
         foreach ($performers as $p) {
             $pName = trim($p['name'] ?? '');
@@ -116,17 +114,14 @@ if ($action === 'insert') {
         }
 
         if ($addedCount === 0) {
-            $pdo->rollBack();
             http_response_code(422);
             echo json_encode(['success' => false, 'error' => 'Please add at least one performer.']);
             exit;
         }
 
-        $pdo->commit();
         echo json_encode(['success' => true, 'added' => $addedCount]);
 
     } catch (PDOException $e) {
-        $pdo->rollBack();
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
     }
@@ -183,7 +178,7 @@ if ($action === 'update') {
         foreach ($removedIds as $epId) {
             $epId = (int)$epId;
             if ($epId <= 0) continue;
-            $pdo->prepare("DELETE FROM event_performers WHERE record_ID = ?")->execute([$epId]);
+            $pdo->prepare("DELETE FROM event_performers WHERE id = ?")->execute([$epId]);
         }
 
         // ── 4. Upsert remaining / new performers ──────────────────────
@@ -207,7 +202,7 @@ if ($action === 'update') {
                         is_Headliner     = ?,
                         is_main_opener   = ?,
                         watched          = ?
-                    WHERE record_ID = ? AND event_ID = ?
+                    WHERE id = ? AND event_ID = ?
                 ")->execute([$performerId, $order, $isHead, $isOpener, $watched, $epId, $eventId]);
             } else {
                 // New performer row — insert
