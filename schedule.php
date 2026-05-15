@@ -167,14 +167,11 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
         <?php endif; ?>
       <?php endif; ?>
 
-      <?php if (!empty($event['memory_path'])): ?>
-        <a class="memories-link"
-           href="#"
-           data-memory-path="<?= htmlspecialchars($event['memory_path']) ?>"
-           onclick="openMemoriesModal(this); return false;">
-          ✦ Memories
-        </a>
-      <?php endif; ?>
+      <button
+        class="memories-link"
+        onclick="openMemoriesDbModal(<?= (int)$event['event_ID'] ?>, <?= htmlspecialchars(json_encode($event['event_Name']), ENT_QUOTES) ?>)">
+        ✦ Memories
+      </button>
 
       <hr class="divider">
 
@@ -2213,5 +2210,6 @@ function escHtml(s) {
 }
 </script>
 
+<?php require 'memories_db_modal.php'; ?>
 </body>
 </html>

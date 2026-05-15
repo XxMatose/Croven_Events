@@ -1,3 +1,5 @@
 # ─── Never commit server environment config ──────────────────────────
 .htaccess
 db_credentials.php
+get_folder_id.php
+get_refresh_token.php

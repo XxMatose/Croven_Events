@@ -1,0 +1,522 @@
+<!-- ─── event_gallery.php / event_gallery.html ──────────────────────────
+     Include this on your event page. Trigger the modal with:
+       openEventGallery(eventId)
+     e.g. <button onclick="openEventGallery(<?= $event['event_id'] ?>)">View Photos & Videos</button>
+
+     Adjust AJAX_URL below to point to your onedrive_ajax.php location.
+──────────────────────────────────────────────────────────────────────── -->
+
+<style>
+  /* ── Reset & tokens ───────────────────────────────────────────────── */
+  :root {
+    --g-ease: cubic-bezier(.22,.68,0,1.2);
+    --g-radius: 14px;
+    --g-dark: #0e0f10;
+    --g-surface: #161718;
+    --g-card: #1e2022;
+    --g-border: rgba(255,255,255,.08);
+    --g-text: #f0f0f0;
+    --g-muted: #8a8d91;
+    --g-accent: #4f8ef7;
+    --g-accent-dim: rgba(79,142,247,.15);
+  }
+
+  /* ── Overlay ──────────────────────────────────────────────────────── */
+  #od-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,.82);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s ease;
+    backdrop-filter: blur(6px);
+  }
+  #od-overlay.visible { opacity: 1; pointer-events: all; }
+
+  /* ── Modal shell ──────────────────────────────────────────────────── */
+  #od-modal {
+    background: var(--g-surface);
+    border: 1px solid var(--g-border);
+    border-radius: var(--g-radius);
+    width: min(960px, 96vw);
+    max-height: 90vh;
+    display: flex; flex-direction: column;
+    transform: translateY(24px) scale(.97);
+    transition: transform .3s var(--g-ease);
+    overflow: hidden;
+  }
+  #od-overlay.visible #od-modal {
+    transform: translateY(0) scale(1);
+  }
+
+  /* ── Header ───────────────────────────────────────────────────────── */
+  #od-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--g-border);
+    flex-shrink: 0;
+  }
+  #od-title {
+    flex: 1;
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    font-size: 16px; font-weight: 600;
+    color: var(--g-text); margin: 0;
+  }
+  #od-filter-btns { display: flex; gap: 6px; }
+  .od-filter-btn {
+    background: transparent; border: 1px solid var(--g-border);
+    border-radius: 20px; padding: 5px 14px;
+    color: var(--g-muted); font-size: 13px; cursor: pointer;
+    transition: all .15s ease;
+  }
+  .od-filter-btn:hover { color: var(--g-text); border-color: rgba(255,255,255,.2); }
+  .od-filter-btn.active {
+    background: var(--g-accent-dim);
+    border-color: var(--g-accent);
+    color: var(--g-accent);
+  }
+  #od-close-btn {
+    background: transparent; border: none;
+    color: var(--g-muted); font-size: 22px;
+    cursor: pointer; line-height: 1;
+    padding: 4px; border-radius: 6px;
+    transition: color .15s;
+  }
+  #od-close-btn:hover { color: var(--g-text); }
+
+  /* ── Upload bar ───────────────────────────────────────────────────── */
+  #od-upload-bar {
+    padding: 10px 22px;
+    border-bottom: 1px solid var(--g-border);
+    display: flex; align-items: center; gap: 12px;
+    flex-shrink: 0;
+  }
+  #od-upload-label {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--g-card); border: 1px solid var(--g-border);
+    border-radius: 8px; padding: 7px 14px;
+    font-size: 13px; color: var(--g-text); cursor: pointer;
+    transition: border-color .15s;
+  }
+  #od-upload-label:hover { border-color: rgba(255,255,255,.2); }
+  #od-upload-label svg { flex-shrink: 0; }
+  #od-file-input { display: none; }
+  #od-upload-status {
+    font-size: 13px; color: var(--g-muted);
+    flex: 1;
+  }
+  #od-progress-wrap {
+    display: none; height: 4px; background: var(--g-border);
+    border-radius: 2px; overflow: hidden; width: 120px;
+  }
+  #od-progress-bar {
+    height: 100%; width: 0%; background: var(--g-accent);
+    transition: width .2s ease;
+  }
+
+  /* ── Grid ─────────────────────────────────────────────────────────── */
+  #od-body {
+    overflow-y: auto; flex: 1; padding: 18px 22px;
+  }
+  #od-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
+
+  /* ── Media tile ───────────────────────────────────────────────────── */
+  .od-tile {
+    position: relative;
+    aspect-ratio: 1;
+    background: var(--g-card);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1px solid var(--g-border);
+    transition: transform .18s var(--g-ease), border-color .18s;
+  }
+  .od-tile:hover { transform: scale(1.03); border-color: rgba(255,255,255,.18); }
+  .od-tile img {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  .od-tile-no-thumb {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--g-muted); font-size: 36px;
+  }
+  .od-play-badge {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.35);
+  }
+  .od-play-badge svg {
+    width: 40px; height: 40px;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,.5));
+  }
+  .od-tile-name {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 20px 8px 7px;
+    background: linear-gradient(transparent, rgba(0,0,0,.7));
+    font-size: 11px; color: #ddd;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    opacity: 0; transition: opacity .15s;
+  }
+  .od-tile:hover .od-tile-name { opacity: 1; }
+
+  /* ── States ───────────────────────────────────────────────────────── */
+  #od-loading, #od-empty, #od-error {
+    padding: 60px 0; text-align: center;
+    color: var(--g-muted); font-size: 14px;
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+  }
+  .od-spinner {
+    width: 28px; height: 28px; margin: 0 auto 16px;
+    border: 2px solid var(--g-border);
+    border-top-color: var(--g-accent);
+    border-radius: 50%;
+    animation: od-spin .7s linear infinite;
+  }
+  @keyframes od-spin { to { transform: rotate(360deg); } }
+
+  /* ── Lightbox ─────────────────────────────────────────────────────── */
+  #od-lightbox {
+    position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,.94);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  #od-lightbox.visible { opacity: 1; pointer-events: all; }
+  #od-lb-inner {
+    position: relative;
+    max-width: 92vw; max-height: 90vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #od-lb-img {
+    max-width: 90vw; max-height: 85vh;
+    border-radius: 8px; display: none;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  }
+  #od-lb-video {
+    max-width: 90vw; max-height: 85vh;
+    border-radius: 8px; display: none;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  }
+  .od-lb-nav {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 50%; width: 44px; height: 44px;
+    color: #fff; font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+  }
+  .od-lb-nav:hover { background: rgba(255,255,255,.18); }
+  #od-lb-prev { left: 16px; }
+  #od-lb-next { right: 16px; }
+  #od-lb-close {
+    position: fixed; top: 16px; right: 20px;
+    background: transparent; border: none;
+    color: rgba(255,255,255,.7); font-size: 28px;
+    cursor: pointer; line-height: 1;
+  }
+  #od-lb-close:hover { color: #fff; }
+  #od-lb-counter {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    font-size: 13px; color: rgba(255,255,255,.5);
+    font-family: -apple-system, sans-serif;
+  }
+</style>
+
+<!-- ── Modal markup ──────────────────────────────────────────────────── -->
+<div id="od-overlay" role="dialog" aria-modal="true" aria-label="Event gallery">
+
+  <div id="od-modal">
+
+    <!-- Header -->
+    <div id="od-header">
+      <h2 id="od-title">Event Gallery</h2>
+      <div id="od-filter-btns">
+        <button class="od-filter-btn active" data-filter="all">All</button>
+        <button class="od-filter-btn" data-filter="photo">Photos</button>
+        <button class="od-filter-btn" data-filter="video">Videos</button>
+      </div>
+      <button id="od-close-btn" aria-label="Close gallery">&times;</button>
+    </div>
+
+    <!-- Upload bar -->
+    <div id="od-upload-bar">
+      <label id="od-upload-label" for="od-file-input">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        Upload photo / video
+      </label>
+      <input type="file" id="od-file-input" accept="image/*,video/*" multiple>
+      <span id="od-upload-status"></span>
+      <div id="od-progress-wrap"><div id="od-progress-bar"></div></div>
+    </div>
+
+    <!-- Grid body -->
+    <div id="od-body">
+      <div id="od-loading">
+        <div class="od-spinner"></div>
+        Loading media…
+      </div>
+      <div id="od-empty"  style="display:none">No photos or videos found in this folder.</div>
+      <div id="od-error"  style="display:none">Could not load media. Please try again.</div>
+      <div id="od-grid"   style="display:none"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Lightbox ──────────────────────────────────────────────────────── -->
+<div id="od-lightbox">
+  <button class="od-lb-nav" id="od-lb-prev" aria-label="Previous">&#8249;</button>
+  <div id="od-lb-inner">
+    <img id="od-lb-img" alt="">
+    <video id="od-lb-video" controls></video>
+  </div>
+  <button class="od-lb-nav" id="od-lb-next" aria-label="Next">&#8250;</button>
+  <button id="od-lb-close" aria-label="Close lightbox">&times;</button>
+  <div id="od-lb-counter"></div>
+</div>
+
+<script>
+(function () {
+  // ── Config ─────────────────────────────────────────────────────────
+  const AJAX_URL = '/Croven_Events/api/onedrive_ajax.php'; // ← adjust to your path
+
+  // ── State ──────────────────────────────────────────────────────────
+  let allMedia     = [];
+  let filtered     = [];
+  let currentIndex = 0;
+  let activeFilter = 'all';
+  let currentEventId = null;
+
+  // ── Elements ───────────────────────────────────────────────────────
+  const overlay    = document.getElementById('od-overlay');
+  const loading    = document.getElementById('od-loading');
+  const empty      = document.getElementById('od-empty');
+  const errEl      = document.getElementById('od-error');
+  const grid       = document.getElementById('od-grid');
+  const fileInput  = document.getElementById('od-file-input');
+  const statusEl   = document.getElementById('od-upload-status');
+  const progressWrap = document.getElementById('od-progress-wrap');
+  const progressBar  = document.getElementById('od-progress-bar');
+  const lightbox   = document.getElementById('od-lightbox');
+  const lbImg      = document.getElementById('od-lb-img');
+  const lbVideo    = document.getElementById('od-lb-video');
+  const lbCounter  = document.getElementById('od-lb-counter');
+
+  // ── Open gallery ───────────────────────────────────────────────────
+  window.openEventGallery = function (eventId, title = 'Event Gallery') {
+    currentEventId = eventId;
+    document.getElementById('od-title').textContent = title;
+    resetView();
+    overlay.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+    loadMedia(eventId);
+  };
+
+  function resetView() {
+    allMedia = []; filtered = [];
+    loading.style.display  = '';
+    empty.style.display    = 'none';
+    errEl.style.display    = 'none';
+    grid.style.display     = 'none';
+    grid.innerHTML         = '';
+    setFilter('all');
+  }
+
+  // ── Close ──────────────────────────────────────────────────────────
+  function closeGallery() {
+    overlay.classList.remove('visible');
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('od-close-btn').addEventListener('click', closeGallery);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeGallery(); });
+
+  // ── Load media ─────────────────────────────────────────────────────
+  async function loadMedia(eventId) {
+    try {
+      const fd = new FormData();
+      fd.append('action', 'list_media');
+      fd.append('event_id', eventId);
+
+      const res  = await fetch(AJAX_URL, { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (!data.success) throw new Error(data.error || 'Unknown error');
+
+      allMedia = data.media;
+      loading.style.display = 'none';
+
+      if (!allMedia.length) {
+        empty.style.display = '';
+        return;
+      }
+
+      applyFilter(activeFilter);
+    } catch (err) {
+      loading.style.display = 'none';
+      errEl.style.display   = '';
+      errEl.textContent     = 'Error: ' + err.message;
+    }
+  }
+
+  // ── Filter ─────────────────────────────────────────────────────────
+  function setFilter(f) {
+    activeFilter = f;
+    document.querySelectorAll('.od-filter-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === f);
+    });
+  }
+
+  function applyFilter(f) {
+    setFilter(f);
+    filtered = f === 'all' ? allMedia : allMedia.filter(m => m.type === f);
+    renderGrid();
+  }
+
+  document.querySelectorAll('.od-filter-btn').forEach(b => {
+    b.addEventListener('click', () => applyFilter(b.dataset.filter));
+  });
+
+  // ── Render grid ────────────────────────────────────────────────────
+  function renderGrid() {
+    grid.innerHTML = '';
+
+    if (!filtered.length) {
+      empty.style.display = '';
+      grid.style.display  = 'none';
+      return;
+    }
+
+    empty.style.display = 'none';
+    grid.style.display  = '';
+
+    filtered.forEach((item, idx) => {
+      const tile = document.createElement('div');
+      tile.className = 'od-tile';
+      tile.setAttribute('role', 'button');
+      tile.setAttribute('tabindex', '0');
+      tile.setAttribute('aria-label', item.name);
+
+      if (item.thumbnail) {
+        tile.innerHTML = `<img src="${escHtml(item.thumbnail)}" alt="${escHtml(item.name)}" loading="lazy">`;
+      } else {
+        tile.innerHTML = `<div class="od-tile-no-thumb">${item.type === 'video' ? '▶' : '🖼'}</div>`;
+      }
+
+      if (item.type === 'video') {
+        tile.innerHTML += `
+          <div class="od-play-badge">
+            <svg viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+          </div>`;
+      }
+
+      tile.innerHTML += `<div class="od-tile-name">${escHtml(item.name)}</div>`;
+
+      tile.addEventListener('click', () => openLightbox(idx));
+      tile.addEventListener('keydown', e => { if (e.key === 'Enter') openLightbox(idx); });
+      grid.appendChild(tile);
+    });
+  }
+
+  // ── Lightbox ───────────────────────────────────────────────────────
+  function openLightbox(idx) {
+    currentIndex = idx;
+    showLightboxItem();
+    lightbox.classList.add('visible');
+  }
+
+  function closeLightbox() {
+    lightbox.classList.remove('visible');
+    lbVideo.pause();
+    lbVideo.src = '';
+    lbImg.style.display   = 'none';
+    lbVideo.style.display = 'none';
+  }
+
+  function showLightboxItem() {
+    const item = filtered[currentIndex];
+    lbCounter.textContent = `${currentIndex + 1} / ${filtered.length}`;
+
+    if (item.type === 'photo') {
+      lbImg.src           = item.downloadUrl || item.thumbnail;
+      lbImg.style.display = 'block';
+      lbVideo.pause();
+      lbVideo.style.display = 'none';
+    } else {
+      lbVideo.src           = item.downloadUrl;
+      lbVideo.style.display = 'block';
+      lbImg.style.display   = 'none';
+    }
+  }
+
+  document.getElementById('od-lb-close').addEventListener('click', closeLightbox);
+  lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
+
+  document.getElementById('od-lb-prev').addEventListener('click', () => {
+    currentIndex = (currentIndex - 1 + filtered.length) % filtered.length;
+    showLightboxItem();
+  });
+  document.getElementById('od-lb-next').addEventListener('click', () => {
+    currentIndex = (currentIndex + 1) % filtered.length;
+    showLightboxItem();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (!lightbox.classList.contains('visible')) return;
+    if (e.key === 'ArrowLeft')  { currentIndex = (currentIndex - 1 + filtered.length) % filtered.length; showLightboxItem(); }
+    if (e.key === 'ArrowRight') { currentIndex = (currentIndex + 1) % filtered.length; showLightboxItem(); }
+    if (e.key === 'Escape')     closeLightbox();
+  });
+
+  // ── Upload ─────────────────────────────────────────────────────────
+  fileInput.addEventListener('change', async () => {
+    const files = Array.from(fileInput.files);
+    if (!files.length) return;
+
+    fileInput.value = '';
+    statusEl.textContent    = `Uploading 0 / ${files.length}…`;
+    progressWrap.style.display = 'block';
+
+    let done = 0;
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('action',   'upload');
+      fd.append('event_id', currentEventId);
+      fd.append('file',     file);
+
+      try {
+        const res  = await fetch(AJAX_URL, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+      } catch (err) {
+        statusEl.textContent = `Failed: ${file.name} — ${err.message}`;
+      }
+
+      done++;
+      progressBar.style.width = `${Math.round((done / files.length) * 100)}%`;
+      statusEl.textContent    = `Uploading ${done} / ${files.length}…`;
+    }
+
+    progressWrap.style.display = 'none';
+    statusEl.textContent = `✓ ${done} file(s) uploaded`;
+    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+
+    // Refresh grid
+    loading.style.display = '';
+    grid.style.display    = 'none';
+    loadMedia(currentEventId);
+  });
+
+  // ── Utility ────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+})();
+</script>

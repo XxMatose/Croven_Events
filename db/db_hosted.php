@@ -22,6 +22,10 @@ define('DB_USER',    getenv('DB_USER'));
 define('DB_PASS',    getenv('DB_PASS'));
 define('DB_CHARSET', 'utf8mb4');
 
+define('ONEDRIVE_CLIENT_ID',    getenv('ONEDRIVE_CLIENT_ID'));
+define('ONEDRIVE_CLIENT_SECRET',    getenv('ONEDRIVE_CLIENT_SECRET'));
+define('ONEDRIVE_REFRESH_TOKEN',    getenv('ONEDRIVE_REFRESH_TOKEN'));
+
 // ─── Connect ────────────────────────────────────────────────────────
 try {
     $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
