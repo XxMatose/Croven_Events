@@ -38,6 +38,126 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
+// ─── Handle setlist data (AJAX GET) ──────────────────────────────────
+if (isset($_GET['action']) && $_GET['action'] === 'setlist_data') {
+    header('Content-Type: application/json');
+    $fid = isset($_GET['festival_id']) ? (int)$_GET['festival_id'] : null;
+
+    if (!$fid) {
+        echo json_encode(['error' => 'No festival_id supplied.']);
+        exit;
+    }
+
+    try {
+        // 1. Config + name
+        $stmt = $pdo->prepare(
+            "SELECT il.valid_days, il.stage_format,
+                    CONCAT(e.event_Year, ' ', e.event_Name) AS festival_name
+               FROM import_logic il
+               JOIN event e ON il.festival_id = e.festival_ID
+              WHERE il.festival_id = :fid LIMIT 1"
+        );
+        $stmt->execute([':fid' => $fid]);
+        $logic = $stmt->fetch();
+
+        if (!$logic) {
+            echo json_encode(['error' => "No import_logic record found for festival ID {$fid}."]);
+            exit;
+        }
+
+        $festivalName = $logic['festival_name'] ?? "Festival #{$fid}";
+        $rawDays  = json_decode($logic['valid_days'],   true) ?: [];
+        $rawStages = json_decode($logic['stage_format'], true) ?: [];
+        $days = array_map('ucfirst', $rawDays);
+
+        uasort($rawStages, fn($a, $b) => (int)($a['order'] ?? 99) <=> (int)($b['order'] ?? 99));
+        $stageFormat = [];
+        foreach ($rawStages as $key => $meta) {
+            $stageFormat[ucfirst(strtolower($key))] = $meta;
+        }
+
+        // 2. Transactions
+        $stmt2 = $pdo->prepare(
+            "SELECT * FROM festival_transactions
+              WHERE festival_ID = :fid ORDER BY day ASC, start_Time ASC"
+        );
+        $stmt2->execute([':fid' => $fid]);
+        $transactions = $stmt2->fetchAll();
+
+        // 3. Preferences
+        $stmt3 = $pdo->prepare(
+            "SELECT trans_ID, viewer, want, need FROM festival_preferences WHERE festival_ID = :fid"
+        );
+        $stmt3->execute([':fid' => $fid]);
+        $prefsByTrans = [];
+        $viewersMap   = [];
+        foreach ($stmt3->fetchAll() as $pref) {
+            $type = $pref['need'] ? 'need' : ($pref['want'] ? 'want' : null);
+            if ($type) {
+                $prefsByTrans[$pref['trans_ID']][$pref['viewer']] = $type;
+                $viewersMap[$pref['viewer']] = true;
+            }
+        }
+        ksort($viewersMap);
+        $viewers = array_keys($viewersMap);
+
+        // 4. Build schedule [day][stage] => [tx, ...]
+        $schedule = [];
+        foreach ($days as $day) {
+            $schedule[$day] = [];
+            foreach (array_keys($stageFormat) as $stage) $schedule[$day][$stage] = [];
+        }
+
+        // Helper: parse time string to minutes
+        $parseMinutes = function(string $t): int {
+            $t = strtoupper(trim($t));
+            if (preg_match('/(\d+):(\d+)\s*([AP])M?/', $t, $m)) {
+                $h = (int)$m[1] % 12; $min = (int)$m[2];
+                if ($m[3] === 'P') $h += 12;
+                $mins = $h * 60 + $min;
+                return $mins < 360 ? $mins + 1440 : $mins;
+            }
+            return 0;
+        };
+
+        foreach ($transactions as $tx) {
+            $txDay   = ucfirst(strtolower($tx['day']   ?? ''));
+            $txStage = ucfirst(strtolower($tx['stage'] ?? ''));
+            if (isset($schedule[$txDay][$txStage])) {
+                $row = [
+                    'performer'  => $tx['performer']  ?? '',
+                    'start_Time' => $tx['start_Time'] ?? '',
+                    'end_Time'   => $tx['end_Time']   ?? '',
+                    'notes'      => $tx['notes']      ?? '',
+                    'prefs'      => $prefsByTrans[$tx['ID']] ?? [],
+                ];
+                $schedule[$txDay][$txStage][] = $row;
+            }
+        }
+        foreach ($schedule as $day => &$stages) {
+            foreach ($stages as $stage => &$bands) {
+                usort($bands, fn($a, $b) =>
+                    $parseMinutes($b['start_Time']) <=> $parseMinutes($a['start_Time'])
+                );
+            }
+        }
+        unset($stages, $bands);
+
+        echo json_encode([
+            'festival_id'       => $fid,
+            'festival_name'     => $festivalName,
+            'days'              => $days,
+            'stage_format'      => $stageFormat,
+            'schedule'          => $schedule,
+            'viewers'           => $viewers,
+            'transaction_count' => count($transactions),
+        ]);
+    } catch (PDOException $e) {
+        echo json_encode(['error' => 'Database error: ' . htmlspecialchars($e->getMessage())]);
+    }
+    exit;
+}
+
 // ─── Load festival list ───────────────────────────────────────────────
 $festivals = [];
 try {
@@ -50,8 +170,8 @@ try {
     $events = $pdo->query("SELECT event_Year, event_Name, MIN(festival_ID) AS festival_ID FROM vw_full_event GROUP BY event_Year, event_Name ORDER BY event_Year, event_Name;")->fetchAll();
 } catch (Exception $e) { /* handled in view */ }
 
-$currentPage = 'festivals';
-$pageTitle   = 'Festivals';
+$currentPage        = 'festivals';
+$pageTitle          = 'Festivals';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -233,6 +353,65 @@ $pageTitle   = 'Festivals';
     .admin-empty-icon {
       font-size: 36px;
       margin-bottom: 10px;
+    }
+
+    /* ── Global festival selector ────────────────────────────── */
+    .global-festival-select-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .gfs-icon {
+      position: absolute;
+      left: 11px;
+      width: 15px;
+      height: 15px;
+      color: var(--muted);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .global-festival-select-wrap select {
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--input-bg);
+      border: 0.5px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 9px 36px 9px 32px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      color: var(--text);
+      cursor: pointer;
+      min-width: 280px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .global-festival-select-wrap select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+    }
+
+    .global-festival-select-wrap select:hover {
+      border-color: var(--accent);
+    }
+
+    .gfs-chevron {
+      position: absolute;
+      right: 10px;
+      width: 14px;
+      height: 14px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    /* ── Gated (disabled) tabs ────────────────────────────────── */
+    .tab-btn.tab-gated:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
     }
 
     /* ── Placeholder panels ───────────────────────────────────── */
@@ -427,16 +606,36 @@ $pageTitle   = 'Festivals';
 
 <div class="festivals-wrap">
 
-  <!-- ── Page header ── -->
+  <!-- ── Page header with global festival selector ── -->
   <div class="festivals-header">
-    <div class="festivals-title">🎪 Festivals</div>
+    <div class="global-festival-select-wrap">
+      <svg class="gfs-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <circle cx="10" cy="10" r="8"/>
+        <path d="M10 6v4l2.5 2.5"/>
+      </svg>
+      <select id="globalFestivalSelect">
+        <option value="">🎪 — Select a Festival —</option>
+        <?php foreach ($festivals as $f): ?>
+          <option
+            value="<?= htmlspecialchars($f['festival_ID']) ?>"
+            data-name="<?= htmlspecialchars($f['event_Name']) ?>"
+            data-year="<?= htmlspecialchars($f['event_Year']) ?>"
+          >
+            <?= htmlspecialchars($f['event_Year']) ?> || <?= htmlspecialchars($f['event_Name']) ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+      <svg class="gfs-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <polyline points="4,6 8,10 12,6"/>
+      </svg>
+    </div>
   </div>
 
   <!-- ── Tab bar ── -->
   <div class="tab-bar" role="tablist">
-    <button class="tab-btn active" role="tab" data-tab="list"     aria-selected="true">Festival List</button>
-    <button class="tab-btn"        role="tab" data-tab="imports"  aria-selected="false">Import</button>
-    <button class="tab-btn"        role="tab" data-tab="reports"  aria-selected="false">Reports</button>
+    <button class="tab-btn active"   role="tab" data-tab="list"    aria-selected="true">Festival List</button>
+    <button class="tab-btn tab-gated" role="tab" data-tab="imports" aria-selected="false" disabled title="Select a festival first">Import</button>
+    <button class="tab-btn tab-gated" role="tab" data-tab="setlist" aria-selected="false" disabled title="Select a festival first">Set List</button>
   </div>
 
   <!-- ── Tab 1: Festival list ── -->
@@ -497,9 +696,9 @@ $pageTitle   = 'Festivals';
     <?php include 'imports_partial.php'; ?>
   </div>
 
-  <!-- ── Tab 3: Placeholder ── -->
-  <div class="tab-panel" id="panel-reports" role="tabpanel">
-    <div class="placeholder-panel">🚧 Reports — coming soon</div>
+  <!-- ── Tab 3: Set List ── -->
+  <div class="tab-panel" id="panel-setlist" role="tabpanel">
+    <?php include 'RockvilleSetList.php'; ?>
   </div>
 
 </div><!-- /festivals-wrap -->
@@ -550,17 +749,59 @@ $pageTitle   = 'Festivals';
 <script>
 (function () {
 
+  // ── Global festival selection ──────────────────────────────────
+  const globalFestivalSelect = document.getElementById('globalFestivalSelect');
+  const gatedTabs = document.querySelectorAll('.tab-btn.tab-gated');
+
+  // Expose selected festival globally so imports_partial can read it
+  window.selectedFestival = { id: '', name: '', year: '' };
+
+  function applyFestivalSelection() {
+    const opt    = globalFestivalSelect.selectedOptions[0];
+    const hasVal = !!globalFestivalSelect.value;
+
+    window.selectedFestival = hasVal ? {
+      id:   globalFestivalSelect.value,
+      name: opt.dataset.name || '',
+      year: opt.dataset.year || ''
+    } : { id: '', name: '', year: '' };
+
+    // Enable / disable gated tabs
+    gatedTabs.forEach(btn => {
+      btn.disabled = !hasVal;
+      btn.title    = hasVal ? '' : 'Select a festival first';
+    });
+
+    // If a gated tab is currently active and selection is cleared, fall back to list
+    const activeBtn = document.querySelector('.tab-btn.active');
+    if (!hasVal && activeBtn && activeBtn.classList.contains('tab-gated')) {
+      switchTab('list');
+    }
+
+    // Notify imports_partial and setlist if listening
+    document.dispatchEvent(new CustomEvent('festivalChanged', { detail: window.selectedFestival }));
+  }
+
+  globalFestivalSelect.addEventListener('change', applyFestivalSelection);
+  applyFestivalSelection(); // run once on load
+
   // ── Tab switching ──────────────────────────────────────────────
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const btn   = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    const panel = document.getElementById('panel-' + tabName);
+    if (btn)   { btn.classList.add('active');   btn.setAttribute('aria-selected', 'true'); }
+    if (panel) { panel.classList.add('active'); }
+  }
+
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.remove('active');
-        b.setAttribute('aria-selected', 'false');
-      });
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      btn.setAttribute('aria-selected', 'true');
-      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+      if (btn.disabled) return;
+      switchTab(btn.dataset.tab);
     });
   });
 
