@@ -371,22 +371,6 @@
 <div class="imp-card" id="imp-step-upload">
     <div class="imp-card-title">01 — Configure Import</div>
 
-    <div style="margin-bottom:24px">
-        <label for="imp-festival-select">Festival</label>
-        <select id="imp-festival-select">
-            <option value="">— Select a festival —</option>
-            <?php foreach ($festivals as $f): ?>
-                <option
-                    value="<?= htmlspecialchars($f['festival_ID']) ?>"
-                    data-name="<?= htmlspecialchars($f['event_Name']) ?>"
-                    data-year="<?= htmlspecialchars($f['event_Year']) ?>"
-                >
-                    <?= htmlspecialchars($f['event_Name']) ?> <?= htmlspecialchars($f['event_Year']) ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-    </div>
-
     <div>
         <label>Import File (.xlsx)</label>
         <div class="imp-drop-zone" id="imp-drop-zone">
@@ -439,7 +423,27 @@
 
 <script>
 (function () {
-    const festivalSelect = document.getElementById('imp-festival-select');
+    // ── Use the global festival dropdown from festivals.php ──
+    // We create a proxy object that reads from window.selectedFestival
+    // so the rest of the code can use festivalSelect.value / .options[].dataset
+    // without changes.
+    const festivalSelect = {
+        get value() { return window.selectedFestival ? window.selectedFestival.id : ''; },
+        get options() {
+            return [{
+                value: window.selectedFestival ? window.selectedFestival.id : '',
+                dataset: {
+                    name: window.selectedFestival ? window.selectedFestival.name : '',
+                    year: window.selectedFestival ? window.selectedFestival.year : ''
+                }
+            }];
+        },
+        get selectedIndex() { return 0; }
+    };
+
+    // Re-check ready state whenever the global festival changes
+    document.addEventListener('festivalChanged', checkReady);
+
     const dropZone       = document.getElementById('imp-drop-zone');
     const fileInput      = document.getElementById('imp-file-input');
     const fileNameDisp   = document.getElementById('imp-file-name-display');
@@ -481,7 +485,7 @@
         checkReady();
     }
 
-    festivalSelect.addEventListener('change', checkReady);
+    // festivalChanged event (from global dropdown) already wired above
 
     function checkReady() {
         btnPreview.disabled = !(festivalSelect.value && selectedFile);
@@ -489,7 +493,6 @@
 
     // ── Reset ──
     btnReset.addEventListener('click', () => {
-        festivalSelect.value = '';
         selectedFile = null;
         fileInput.value = '';
         fileNameDisp.classList.add('imp-hidden');
