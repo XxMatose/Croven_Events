@@ -2,13 +2,24 @@
 require_once 'db/db_hosted.php';
 require_once 'api/auth.php';
 
-// ─── Query users for Favorites dropdown ─────────────────────────────
+// ─── Query users for Favorites dropdown + watched-by chips ──────────
 $usersStmt = $pdo->query("SELECT id, name FROM users ORDER BY name ASC");
-$favUsers = $usersStmt->fetchAll();
+$favUsers  = $usersStmt->fetchAll();
+// Reuse the same result for the JS users list (no second query needed)
+$allUsers  = $favUsers;
 
 // ─── Query the view ─────────────────────────────────────────────────
 $stmt = $pdo->query("SELECT * FROM vw_full_event");
 $rows = $stmt->fetchAll();
+
+// ─── Pre-load all watched rows indexed by event_performer_ID ─────────
+$watchedMap = [];
+try {
+    $wRows = $pdo->query("SELECT event_performer_ID, user_ID FROM event_performers_watched")->fetchAll();
+    foreach ($wRows as $wr) {
+        $watchedMap[(int)$wr['event_performer_ID']][] = (int)$wr['user_ID'];
+    }
+} catch (Exception $e) { /* skip if table doesn't exist yet */ }
 
 // ─── Group rows by event_ID ──────────────────────────────────────────
 $events = [];
@@ -31,13 +42,14 @@ foreach ($rows as $row) {
     }
 
     if (!empty($row['performer_Name'])) {
+        $epId = isset($row['ep_id']) ? (int)$row['ep_id'] : null;
         $events[$id]['performers'][] = [
-            'ep_id'           => $row['ep_id'] ?? null,   // event_performers PK
-            'name'            => $row['performer_Name'],
-            'is_Headliner'    => $row['is_Headliner'],
-            'is_Opener'       => $row['is_main_opener'] ?? 0,
-            'order_performed' => $row['order_performed'],
-            'watched'         => (int)$row['watched'] === 1,
+            'ep_id'            => $epId,
+            'name'             => $row['performer_Name'],
+            'is_Headliner'     => $row['is_Headliner'],
+            'is_Opener'        => $row['is_main_opener'] ?? 0,
+            'order_performed'  => $row['order_performed'],
+            'watched_user_ids' => ($epId && isset($watchedMap[$epId])) ? $watchedMap[$epId] : [],
         ];
     }
 }
@@ -66,6 +78,7 @@ try {
 $eventsJson    = json_encode(array_values($events));
 $venuesJson    = json_encode(array_values($allVenues),     JSON_HEX_TAG);
 $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
+$usersJson     = json_encode(array_values($allUsers),      JSON_HEX_TAG);
 ?>
 
 <!DOCTYPE html>
@@ -182,15 +195,32 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
         <?php if (empty($event['performers'])): ?>
           <span class="no-performers">No performers listed</span>
         <?php else: ?>
+          <?php
+            // Build a map of user id => name for quick lookup
+            $userNameMap = [];
+            foreach ($allUsers as $u) { $userNameMap[(int)$u['id']] = $u['name']; }
+          ?>
           <?php foreach ($event['performers'] as $p): ?>
+            <?php
+              $watchedNames = array_filter(array_map(
+                fn($uid) => $userNameMap[$uid] ?? null,
+                $p['watched_user_ids'] ?? []
+              ));
+              $isWatched = !empty($watchedNames);
+            ?>
             <div class="performer-row 
               <?= $p['is_Headliner'] ? 'headliner' : '' ?> 
-              <?= $p['watched'] ? 'watched' : 'not-watched' ?>">
+              <?= $isWatched ? 'watched' : 'not-watched' ?>">
 
               <div class="performer-left">
                 <span class="performer-name">
                   <?= htmlspecialchars($p['name']) ?>
                 </span>
+                <?php if ($isWatched): ?>
+                  <span class="performer-watched-by">
+                    👁 <?= htmlspecialchars(implode(', ', $watchedNames)) ?>
+                  </span>
+                <?php endif; ?>
               </div>
 
               <div class="badge-row">
@@ -221,6 +251,16 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* ── Watched-by label on performer rows ─────────────────────────────── */
+.performer-watched-by {
+  display: block;
+  font-size: 0.68rem;
+  opacity: 0.75;
+  color: var(--watched-text, #4ade80);
+  margin-top: 1px;
+  letter-spacing: 0.01em;
 }
 .card-edit-btn {
   background: none;
@@ -812,7 +852,7 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
 /* Performers inside modal */
 .em-p-header {
   display: grid;
-  grid-template-columns: 1fr 52px auto auto auto auto;
+  grid-template-columns: 1fr 52px auto auto 1fr auto;
   gap: 6px;
   padding: 0 10px 4px;
   font-size: 0.65rem;
@@ -829,9 +869,9 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
 
 .em-p-row {
   display: grid;
-  grid-template-columns: 1fr 52px auto auto auto auto;
+  grid-template-columns: 1fr 52px auto auto 1fr auto;
   gap: 6px;
-  align-items: center;
+  align-items: start;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -839,7 +879,7 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
   animation: fadeIn 0.18s ease;
 }
 @media (max-width: 480px) {
-  .em-p-row { grid-template-columns: 1fr 40px auto auto auto auto; gap: 4px; }
+  .em-p-row { grid-template-columns: 1fr 40px auto auto 1fr auto; gap: 4px; }
 }
 
 .em-p-name-wrap { position: relative; width: 100%; }
@@ -908,9 +948,48 @@ $performersJson= json_encode(array_values($allPerformers), JSON_HEX_TAG);
   background: var(--highlight);
   border-color: #9a6000;
 }
-.em-toggle.is-watched input:checked ~ .em-toggle-box {
+
+/* ── Watched-by user chip selector (edit modal) ─────────────────────── */
+.em-watched-by {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.em-watched-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.em-user-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--input-bg);
+  color: var(--muted);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  line-height: 1;
+}
+.em-user-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.em-user-chip.active {
   background: var(--watched-bg);
   border-color: var(--watched-text);
+  color: var(--watched-text);
+}
+body.red .em-user-chip.active {
+  background: rgba(255,43,43,0.15);
+  border-color: #ff2b2b;
+  color: #ff2b2b;
 }
 
 .em-p-remove {
@@ -1118,7 +1197,7 @@ body.red .em-btn-save { background: #ff2b2b; }
           <span>Order</span>
           <span>Head</span>
           <span>Open</span>
-          <span>Watch</span>
+          <span style="text-align:left">Watched By</span>
           <span></span>
         </div>
         <div class="em-p-list" id="emPerformerList"></div>
@@ -1198,6 +1277,8 @@ body.red  .fav-select option { background: #141414; color: #ff2b2b; }
 const allEvents    = <?= $eventsJson ?>;
 const VENUES_LIST  = <?= $venuesJson ?>;
 const PERF_LIST    = <?= $performersJson ?>;
+const USERS_LIST   = <?= $usersJson ?>;
+const AUTH_USER_ID = <?= (int)$authUserId ?>;
 
 const cards       = () => document.querySelectorAll('#cardGrid .card');
 const countEl     = document.getElementById('visibleCount');
@@ -1503,6 +1584,12 @@ let editingEventId  = null;
 let emRowCount      = 0;
 let removedEpIds    = [];  // event_performers IDs staged for deletion
 
+// ── Helper: collect active watched user IDs from a modal row ──────────
+function getWatchedUserIds(row) {
+  return Array.from(row.querySelectorAll('.em-user-chip.active'))
+    .map(el => parseInt(el.dataset.userId));
+}
+
 function openEditModal(eventId) {
   const ev = allEvents.find(e => e.event_ID === eventId);
   if (!ev) return;
@@ -1534,12 +1621,12 @@ function openEditModal(eventId) {
   const list = document.getElementById('emPerformerList');
   list.innerHTML = '';
   (ev.performers || []).forEach(p => addEmPerformerRow({
-    ep_id:        p.ep_id,
-    name:         p.name,
-    order:        p.order_performed,
-    is_headliner: p.is_Headliner,
-    is_opener:    p.is_Opener,
-    watched:      p.watched,
+    ep_id:           p.ep_id,
+    name:            p.name,
+    order:           p.order_performed,
+    is_headliner:    p.is_Headliner,
+    is_opener:       p.is_Opener,
+    watched_user_ids: p.watched_user_ids || [],
   }));
 
   // Clear feedback
@@ -1572,6 +1659,12 @@ function addEmPerformerRow(opts = {}) {
   row.id          = 'em-prow-' + i;
   row.dataset.epId = opts.ep_id || '';
 
+  // Build user chips
+  const preSelected = opts.watched_user_ids || [];
+  const chipsHtml = USERS_LIST.map(u =>
+    `<button type="button" class="em-user-chip${preSelected.includes(u.id) ? ' active' : ''}" data-user-id="${u.id}">${escHtml(u.name)}</button>`
+  ).join('');
+
   row.innerHTML = `
     <div class="em-p-name-wrap">
       <input type="text" class="em-p-name-input" placeholder="Performer name"
@@ -1590,13 +1683,16 @@ function addEmPerformerRow(opts = {}) {
       <span class="em-toggle-label">Open</span>
       <span class="em-toggle-box">🎸</span>
     </label>
-    <label class="em-toggle is-watched" title="Watched">
-      <input type="checkbox" class="em-p-watched" ${opts.watched ? 'checked' : ''}>
-      <span class="em-toggle-label">Watch</span>
-      <span class="em-toggle-box">👁️</span>
-    </label>
+    <div class="em-watched-by">
+      <div class="em-watched-chips">${chipsHtml}</div>
+    </div>
     <button type="button" class="em-p-remove" title="Remove">×</button>
   `;
+
+  // Toggle chips on click
+  row.querySelectorAll('.em-user-chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
 
   // Remove: if existing ep_id, stage for deletion
   row.querySelector('.em-p-remove').addEventListener('click', () => {
@@ -1711,12 +1807,12 @@ document.getElementById('emBtnSave').addEventListener('click', async () => {
     const name = row.querySelector('.em-p-name-input').value.trim();
     if (!name) return;
     performers.push({
-      ep_id:        parseInt(row.dataset.epId) || 0,
+      ep_id:           parseInt(row.dataset.epId) || 0,
       name,
-      order:        parseInt(row.querySelector('.em-p-order').value) || (idx + 1),
-      is_headliner: row.querySelector('.em-p-head').checked    ? 1 : 0,
-      is_main_opener: row.querySelector('.em-p-opener').checked  ? 1 : 0,
-      watched:      row.querySelector('.em-p-watched').checked ? 1 : 0,
+      order:           parseInt(row.querySelector('.em-p-order').value) || (idx + 1),
+      is_headliner:    row.querySelector('.em-p-head').checked    ? 1 : 0,
+      is_main_opener:  row.querySelector('.em-p-opener').checked  ? 1 : 0,
+      watched_user_ids: getWatchedUserIds(row),
     });
   });
 
@@ -1760,12 +1856,12 @@ document.getElementById('emBtnSave').addEventListener('click', async () => {
         // Use fresh performers from API (includes new record_IDs)
         if (data.performers) {
           allEvents[evIdx].performers = data.performers.map(p => ({
-            ep_id:           p.ep_id,
-            name:            p.name,
-            is_Headliner:    p.is_Headliner,
-            is_Opener:       p.is_main_opener,
-            order_performed: p.order_performed,
-            watched:         p.watched == 1,
+            ep_id:            p.ep_id,
+            name:             p.name,
+            is_Headliner:     p.is_Headliner,
+            is_Opener:        p.is_main_opener,
+            order_performed:  p.order_performed,
+            watched_user_ids: p.watched_user_ids || [],
           }));
         }
       }
@@ -1816,7 +1912,10 @@ function updateCardInPlace(eventId, data) {
   if (perfList) {
     // Remove all existing performer rows
     perfList.querySelectorAll('.performer-row').forEach(r => r.remove());
-    const labelEl = perfList.querySelector('.performer-list-label');
+
+    // Build a user id => name lookup from USERS_LIST
+    const userNameMap = {};
+    USERS_LIST.forEach(u => { userNameMap[u.id] = u.name; });
 
     if (performers.length === 0) {
       const noEl = document.createElement('span');
@@ -1826,14 +1925,19 @@ function updateCardInPlace(eventId, data) {
     } else {
       perfList.querySelector('.no-performers')?.remove();
       performers.forEach(p => {
+        const watchedIds   = p.watched_user_ids || [];
+        const watchedNames = watchedIds.map(id => userNameMap[id]).filter(Boolean);
+        const isWatched    = watchedNames.length > 0;
+
         const row = document.createElement('div');
         row.className = 'performer-row' +
           (p.is_headliner ? ' headliner' : '') +
-          (p.watched ? ' watched' : ' not-watched');
+          (isWatched ? ' watched' : ' not-watched');
 
         row.innerHTML = `
           <div class="performer-left">
             <span class="performer-name">${escHtml(p.name)}</span>
+            ${isWatched ? `<span class="performer-watched-by">👁 ${escHtml(watchedNames.join(', '))}</span>` : ''}
           </div>
           <div class="badge-row">
             ${p.is_headliner ? '<span class="badge badge-headliner">Headliner</span>' : ''}
