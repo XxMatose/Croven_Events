@@ -15,6 +15,13 @@ try {
     $pStmt = $pdo->query("SELECT performer_ID, performer_Name FROM performer ORDER BY performer_Name");
     $performers = $pStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) { /* skip */ }
+
+// ─── Fetch all users for the watched-by chip selector ────────────────
+$allUsers = [];
+try {
+    $uStmt = $pdo->query("SELECT id, name FROM users ORDER BY name ASC");
+    $allUsers = $uStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) { /* skip */ }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -184,11 +191,12 @@ try {
       gap: 8px;
     }
 
+    /* ── Performer row: name | order | head | open | watched-by | × ── */
     .p-row {
       display: grid;
-      grid-template-columns: 1fr 56px auto auto auto auto;
+      grid-template-columns: 1fr 56px auto auto 1fr auto;
       gap: 8px;
-      align-items: center;
+      align-items: start;
       background: var(--input-bg);
       border: 0.5px solid var(--border);
       border-radius: 10px;
@@ -196,7 +204,7 @@ try {
       animation: fadeIn 0.2s ease;
     }
     @media (max-width: 480px) {
-      .p-row { grid-template-columns: 1fr 44px auto auto auto auto; gap: 5px; }
+      .p-row { grid-template-columns: 1fr 44px auto auto 1fr auto; gap: 5px; }
     }
 
     .p-row input[type="text"],
@@ -253,10 +261,6 @@ try {
       background: var(--highlight);
       border-color: #9a6000;
     }
-    .p-toggle.is-watched input:checked ~ .p-toggle-box {
-      background: var(--watched-bg);
-      border-color: var(--watched-text);
-    }
 
     .p-remove {
       background: none;
@@ -279,7 +283,7 @@ try {
 
     .p-header {
       display: grid;
-      grid-template-columns: 1fr 56px auto auto auto auto;
+      grid-template-columns: 1fr 56px auto auto 1fr auto;
       gap: 8px;
       padding: 0 12px 2px;
       font-size: 10px;
@@ -289,8 +293,51 @@ try {
       color: var(--muted);
     }
     .p-header span { text-align: center; }
-    .p-header span:first-child { text-align: left; }
+    .p-header span:first-child  { text-align: left; }
+    .p-header span:nth-child(5) { text-align: left; }
     @media (max-width: 480px) { .p-header { display: none; } }
+
+    /* ── Watched-by chip selector ────────────────────────────────── */
+    .p-watched-by {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .p-watched-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .p-user-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      border: 0.5px solid var(--border-strong);
+      background: var(--card-bg);
+      color: var(--muted);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+      line-height: 1;
+    }
+    .p-user-chip:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .p-user-chip.active {
+      background: var(--watched-bg);
+      border-color: var(--watched-text);
+      color: var(--watched-text);
+    }
+    body.red .p-user-chip.active {
+      background: rgba(255,43,43,0.15);
+      border-color: #ff2b2b;
+      color: #ff2b2b;
+    }
 
     .btn-add-performer {
       width: 100%;
@@ -461,7 +508,7 @@ try {
       <span>Order</span>
       <span>Head</span>
       <span>Open</span>
-      <span>Watched</span>
+      <span>Watched By</span>
       <span></span>
     </div>
     <div id="performersList"></div>
@@ -475,8 +522,15 @@ try {
 <script>
 const VENUES     = <?= json_encode(array_values($venues),     JSON_HEX_TAG) ?>;
 const PERFORMERS = <?= json_encode(array_values($performers), JSON_HEX_TAG) ?>;
+const USERS_LIST = <?= json_encode(array_values($allUsers),   JSON_HEX_TAG) ?>;
 
 let rowCount = 0;
+
+// ── Helper: collect active watched user IDs from a row ───────────────
+function getWatchedUserIds(row) {
+  return Array.from(row.querySelectorAll('.p-user-chip.active'))
+    .map(el => parseInt(el.dataset.userId));
+}
 
 // ── Performer rows ────────────────────────────────────────────────────
 function addPerformerRow(opts = {}) {
@@ -486,6 +540,12 @@ function addPerformerRow(opts = {}) {
   row.className = 'p-row';
   row.id = 'prow-' + i;
   row.dataset.epId = opts.ep_id || '';
+
+  // Build user chips HTML
+  const preSelected = opts.watched_user_ids || [];
+  const chipsHtml = USERS_LIST.map(u =>
+    `<button type="button" class="p-user-chip${preSelected.includes(u.id) ? ' active' : ''}" data-user-id="${u.id}">${esc(u.name)}</button>`
+  ).join('');
 
   row.innerHTML = `
     <div class="p-name-wrap" style="position:relative">
@@ -505,13 +565,16 @@ function addPerformerRow(opts = {}) {
       <span class="p-toggle-label">Open</span>
       <span class="p-toggle-box">🎸</span>
     </label>
-    <label class="p-toggle is-watched" title="I watched this">
-      <input type="checkbox" class="p-watched-cb" ${opts.watched ? 'checked' : ''}>
-      <span class="p-toggle-label">Watched</span>
-      <span class="p-toggle-box">👁️</span>
-    </label>
+    <div class="p-watched-by">
+      <div class="p-watched-chips">${chipsHtml}</div>
+    </div>
     <button type="button" class="p-remove" title="Remove">×</button>
   `;
+
+  // Toggle chips on click
+  row.querySelectorAll('.p-user-chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
 
   row.querySelector('.p-remove').addEventListener('click', () => row.remove());
   attachPerformerCombobox(row.querySelector('.p-name-input'), row.querySelector('.p-dd'));
@@ -623,10 +686,10 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     if (!name) return;
     performers.push({
       name,
-      order:        parseInt(row.querySelector('.p-order-input').value) || (idx + 1),
-      is_headliner: row.querySelector('.p-head-cb').checked   ? 1 : 0,
-      is_main_opener: row.querySelector('.p-opener-cb').checked  ? 1 : 0,
-      watched:      row.querySelector('.p-watched-cb').checked ? 1 : 0,
+      order:            parseInt(row.querySelector('.p-order-input').value) || (idx + 1),
+      is_headliner:     row.querySelector('.p-head-cb').checked   ? 1 : 0,
+      is_main_opener:   row.querySelector('.p-opener-cb').checked  ? 1 : 0,
+      watched_user_ids: getWatchedUserIds(row),
     });
   });
 
